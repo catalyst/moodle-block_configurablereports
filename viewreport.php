@@ -75,13 +75,13 @@ $download = $download && $format && strpos($report->export, $format . ',') !== f
 if ($download && $report->type === "sql") {
     $reportclass->set_forexport(true);
 }
+$reportclass->check_filters_request();
 $reportclass->create_report();
 
 $action = (!empty($download)) ? 'download' : 'view';
 
 // No download, build navigation header etc..
 if (!$download) {
-    $reportclass->check_filters_request();
     $reportname = format_string($report->name);
     $navlinks = [];
 
