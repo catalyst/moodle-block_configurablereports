@@ -64,17 +64,6 @@ function xmldb_block_configurable_reports_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2011040106, 'block', 'configurable_reports');
     }
 
-    if ($oldversion < 2011040115) {
-
-        $table = new xmldb_table('block_configurable_reports');
-
-        $field = new xmldb_field('remote', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, null, null, '0', null);
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        upgrade_plugin_savepoint(true, 2011040115, 'block', 'configurable_reports');
-    }
-
     if ($oldversion < 2019020600) {
         $table = new xmldb_table('block_configurable_reports');
         $field = new xmldb_field('summaryformat');
@@ -149,6 +138,17 @@ function xmldb_block_configurable_reports_upgrade($oldversion) {
             $dbman->change_field_notnull($table, $field);
         }
         upgrade_plugin_savepoint(true, 2019062001, 'block', 'configurable_reports');
+    }
+
+    if ($oldversion < 2020110301) {
+
+        $table = new xmldb_table('block_configurable_reports');
+
+        $field = new xmldb_field('remote', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, null, null, '0', null);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2020110301, 'block', 'configurable_reports');
     }
 
     if ($oldversion < 2024051300) {
