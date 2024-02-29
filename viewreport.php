@@ -71,7 +71,9 @@ $PAGE->requires->jquery();
 $download = ($download && $format && strpos($report->export, $format.',') !== false) ? true : false;
 
 if ($download && $report->type == "sql") $reportclass->setForExport(true);
-$reportclass->check_filters_request();
+if (!$download) {
+    $reportclass->check_filters_request();
+}
 $reportclass->create_report();
 
 $action = (!empty($download)) ? 'download' : 'view';
