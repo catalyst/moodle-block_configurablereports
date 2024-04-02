@@ -144,7 +144,7 @@ class report_sql extends report_base {
                         if (!$this->isForExport()) {
                             $cell = format_text($cell, FORMAT_HTML, array('trusted' => true, 'noclean' => true, 'para' => false));
                         }
-                        $arrayrow[$ii] = str_replace('[[QUESTIONMARK]]', '?', $cell);
+                        $arrayrow[$ii] = str_replace('[[QUESTIONMARK]]', '?', $cell ?? '');
                     }
                     $totalrecords++;
                     $finaltable[] = $arrayrow;
