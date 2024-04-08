@@ -25,6 +25,8 @@
 defined('MOODLE_INTERNAL') || die;
 require_once($CFG->dirroot . '/blocks/configurable_reports/plugin.class.php');
 
+use core_user\fields;
+
 /**
  * Class plugin_user
  *
@@ -117,10 +119,11 @@ class plugin_user extends plugin_base {
                 $nameformat = get_string('fullnamedisplay');
             }
 
-            $sort = implode(',', order_in_string(get_all_user_name_fields(), $nameformat));
+            $sort = implode(',', order_in_string(fields::get_name_fields(), $nameformat));
 
-            [$usql, $params] = $remotedb->get_in_or_equal($userlist);
-            $users = $remotedb->get_records_select('user', "id " . $usql, $params, $sort, 'id,' . get_all_user_name_fields(true));
+            list($usql, $params) = $remotedb->get_in_or_equal($userlist);
+            $users = $remotedb->get_records_select('user', "id " . $usql, $params, $sort, 'id,'
+                . implode(',', fields::get_name_fields()));
 
             foreach ($users as $c) {
                 $useroptions[$c->id] = fullname($c);
