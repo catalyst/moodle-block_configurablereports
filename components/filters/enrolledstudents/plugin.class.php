@@ -22,6 +22,8 @@
  * @date: 2009
  */
 
+use core_user\fields;
+
 require_once($CFG->dirroot.'/blocks/configurable_reports/plugin.class.php');
 
 class plugin_enrolledstudents extends plugin_base{
@@ -91,10 +93,11 @@ class plugin_enrolledstudents extends plugin_base{
                 $nameformat = get_string('fullnamedisplay');
             }
 
-            $sort = implode(',', order_in_string(get_all_user_name_fields(), $nameformat));
+            $sort = implode(',', order_in_string(fields::get_name_fields(), $nameformat));
 
             list($usql, $params) = $remotedb->get_in_or_equal($enrolledstudentslist);
-            $enrolledstudents = $remotedb->get_records_select('user', "id " . $usql, $params, $sort, 'id,' .get_all_user_name_fields(true));
+            $enrolledstudents = $remotedb->get_records_select('user', "id " . $usql, $params, $sort, 'id,'
+                . implode(',', fields::get_name_fields()));
 
             foreach ($enrolledstudents as $c) {
                 $enrolledstudentsoptions[$c->id] = fullname($c);
