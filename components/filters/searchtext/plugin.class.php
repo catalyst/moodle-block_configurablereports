@@ -135,7 +135,8 @@ class plugin_searchtext extends plugin_base {
             }
 
             if ($operator === '~') {
-                $replace = " AND " . $field . " LIKE '%" . $filtersearchtext . "%'";
+                $searchitem = trim(str_replace("'", "''", $filtersearchtext));
+                $replace = " AND " . $field . " LIKE '%" . $searchitem . "%'";
             } else if ($operator === 'in') {
                 $processeditems = [];
                 // Accept comma-separated values, allowing for '\,' as a literal comma.

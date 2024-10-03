@@ -236,7 +236,8 @@ class plugin_fuserfield extends plugin_base {
             }
             if ($operator === '~') {
                 // TODO can be improved by more native PDO approach.
-                $replace = " AND " . $field . " LIKE '%" . $filtersearchtext . "%'";
+                $searchitem = trim(str_replace("'", "''", $filtersearchtext));
+                $replace = " AND " . $field . " LIKE '%" . $searchitem . "%'";
             } else if ($operator === 'in') {
                 $processeditems = [];
 
