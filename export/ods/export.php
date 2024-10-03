@@ -35,7 +35,8 @@ function export_report($report) {
 
     $table = $report->table;
     $matrix = [];
-    $filename = 'report_' . (time()) . '.ods';
+    $reportname = format_string($report->name) ?? 'report';
+    $filename = $reportname . (time()) . '.ods';
 
     if (!empty($table->head)) {
         foreach ($table->head as $key => $heading) {

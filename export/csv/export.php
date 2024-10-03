@@ -34,8 +34,9 @@ function export_report($report) {
     require_once($CFG->libdir . '/csvlib.class.php');
 
     $table = $report->table;
+
     $matrix = [];
-    $filename = 'report';
+    $filename = format_string($report->name) ?? 'report';
 
     if (!empty($table->head)) {
         foreach ($table->head as $key => $heading) {
