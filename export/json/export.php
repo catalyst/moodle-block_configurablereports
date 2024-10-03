@@ -31,8 +31,9 @@
  */
 function export_report($report) {
     $table = $report->table;
-    $report_name = format_string($report->name) ?? 'report';
-    $filename = $report_name.'_'.(time()).'.json';
+
+    $reportname = format_string($report->name) ?? 'report';
+    $filename = $reportname . '_' . (time()) . '.json';
     $json = [];
     $headers = $table->head;
     foreach ($table->data as $data) {

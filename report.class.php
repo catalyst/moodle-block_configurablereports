@@ -727,6 +727,7 @@ abstract class report_base {
         if (!$this->finalreport) {
             $this->finalreport = new stdClass;
         }
+        $this->finalreport->name = $this->config->name;
         $this->finalreport->table = $table;
         $this->finalreport->calcs = $calcs;
 
