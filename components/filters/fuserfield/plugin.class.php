@@ -184,7 +184,7 @@ class plugin_fuserfield extends plugin_base {
             if (strpos($formdata->field, 'profile_') === 0) {
                 $conditions = ['shortname' => str_replace('profile_', '', $formdata->field)];
                 if ($field = $remotedb->get_record('user_info_field', $conditions)) {
-                    $selectname = $field->name;
+                    $selectname = format_string($field->name);
                     [$usql, $params] = $remotedb->get_in_or_equal($userlist);
                     $sql = "SELECT DISTINCT(data) as data FROM {user_info_data} WHERE fieldid = ? AND userid $usql";
                     $params = array_merge([$field->id], $params);
@@ -192,7 +192,7 @@ class plugin_fuserfield extends plugin_base {
                     if ($infodata = $remotedb->get_records_sql($sql, $params)) {
                         $finalusersid = [];
                         foreach ($infodata as $d) {
-                            $filteroptions[base64_encode($d->data)] = $d->data;
+                            $filteroptions[base64_encode(format_string($d->data))] = format_string($d->data);
                         }
                     }
                 }
