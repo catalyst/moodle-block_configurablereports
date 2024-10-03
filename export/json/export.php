@@ -39,7 +39,7 @@ function export_report($report) {
     foreach ($table->data as $data) {
         $jsonobject = [];
         foreach ($data as $index => $value) {
-            $jsonobject[$headers[$index]] = $value;
+            $jsonobject[$headers[$index]] = format_string($value);
         }
         $json[] = $jsonobject;
     }
