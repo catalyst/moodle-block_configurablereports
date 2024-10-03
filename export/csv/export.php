@@ -15,25 +15,30 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Configurable Reports
- * A Moodle block for creating customizable reports
- * @package blocks
- * @author: Juan leyva <http://www.twitter.com/jleyvadelgado>
- * @date: 2009
+ * Configurable Reports a Moodle block for creating customizable reports
+ *
+ * @copyright  2020 Juan Leyva <juan@moodle.com>
+ * @package    block_configurable_reports
+ * @author     Juan leyva <http://www.twitter.com/jleyvadelgado>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+/**
+ * export_report
+ *
+ * @param object $report
+ * @return void
+ */
 function export_report($report) {
-    global $DB, $CFG;
+    global $CFG;
     require_once($CFG->libdir . '/csvlib.class.php');
 
     $table = $report->table;
-    $matrix = array();
-    $filename = 'report';
+
+    $matrix = [];
+    $filename = format_string($report->name) ?? 'report';
 
     if (!empty($table->head)) {
-        $countcols = count($table->head);
-        $keys = array_keys($table->head);
-        $lastkey = end($keys);
         foreach ($table->head as $key => $heading) {
             $matrix[0][$key] = str_replace("\n", ' ', htmlspecialchars_decode(strip_tags(nl2br(format_string($heading)))));
         }
@@ -48,7 +53,7 @@ function export_report($report) {
     }
 
     $csvdelimiter = get_config('block_configurable_reports', 'csvdelimiter');
-    $csvexport = new csv_export_writer("$csvdelimiter");
+    $csvexport = new csv_export_writer("$csvdelimiter", '"', 'application/download', true);
     $csvexport->set_filename($filename);
 
     foreach ($matrix as $ri => $col) {
