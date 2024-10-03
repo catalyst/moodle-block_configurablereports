@@ -863,9 +863,11 @@ abstract class report_base {
             echo format_text($pagecontents['header'], FORMAT_HTML);
         }
 
-        $a = new stdClass();
-        $a->totalrecords = $this->totalrecords;
-        echo html_writer::tag('div', get_string('totalrecords', 'block_configurable_reports', $a), ['id' => 'totalrecords']);
+        if ($this->config->displaytotalrecords) {
+            $a = new \stdClass();
+            $a->totalrecords = $this->totalrecords;
+            echo \html_writer::tag('div', get_string('totalrecords', 'block_configurable_reports', $a), array('id' => 'totalrecords'));
+        }
 
         if ($recordtpl) {
             if ($this->config->pagination) {
@@ -897,11 +899,12 @@ abstract class report_base {
         }
 
         echo "</div>\n";
-        echo '<div class="centerpara"><br />';
-        echo $OUTPUT->pix_icon('print', get_string('printreport', 'block_configurable_reports'), 'block_configurable_reports');
-        echo "&nbsp;<a href=\"javascript: printDiv('printablediv')\">" . get_string('printreport', 'block_configurable_reports') .
-            "</a>";
-        echo "</div>\n";
+        if ($this->config->displayprintbutton) {
+            echo '<div class="centerpara"><br />';
+            echo $OUTPUT->pix_icon('print', get_string('printreport', 'block_configurable_reports'), 'block_configurable_reports');
+            echo "&nbsp;<a href=\"javascript: printDiv('printablediv')\">".get_string('printreport', 'block_configurable_reports')."</a>";
+            echo "</div>\n";
+        }
     }
 
     /**
@@ -913,7 +916,9 @@ abstract class report_base {
     public function print_report_page(moodle_page $moodlepage) {
         global $OUTPUT;
 
-        cr_print_js_function();
+        if ($this->config->displayprintbutton) {
+            cr_print_js_function();
+        }
         $components = cr_unserialize($this->config->components);
 
         $template = (isset($components['template']['config']) && $components['template']['config']->enabled &&
@@ -1011,11 +1016,12 @@ abstract class report_base {
             echo '<div class="centerpara">' . get_string('norecordsfound', 'block_configurable_reports') . '</div>';
         }
 
-        echo '<div class="centerpara"><br />';
-        echo $OUTPUT->pix_icon('print', get_string('printreport', 'block_configurable_reports'), 'block_configurable_reports');
-        echo "&nbsp;<a href=\"javascript: printDiv('printablediv')\">" . get_string('printreport', 'block_configurable_reports') .
-            "</a>";
-        echo "</div>\n";
+        if ($this->config->displayprintbutton) {
+            echo '<div class="centerpara"><br />';
+            echo $OUTPUT->pix_icon('print', get_string('printreport', 'block_configurable_reports'), 'block_configurable_reports');
+            echo "&nbsp;<a href=\"javascript: printDiv('printablediv')\">".get_string('printreport', 'block_configurable_reports')."</a>";
+            echo "</div>\n";
+        }
     }
 
     /**

@@ -151,5 +151,18 @@ function xmldb_block_configurable_reports_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2019062001, 'block', 'configurable_reports');
     }
 
+    if ($oldversion < 2024051300) {
+        $table = new xmldb_table('block_configurable_reports');
+        $field = new xmldb_field('displaytotalrecords', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, null, null, '1', null);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('displayprintbutton', XMLDB_TYPE_INTEGER, '1', XMLDB_UNSIGNED, null, null, '1', null);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2024051300, 'block', 'configurable_reports');
+    }
+
     return true;
 }
