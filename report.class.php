@@ -193,14 +193,15 @@ class report_base {
         }
     }
 
-    public function print_graphs($return = false) {
+    public function print_graphs($return = false, $courseid = 0) {
         $output = '';
         $graphs = $this->get_graphs($this->finalreport->table->data);
+        $courseidparam = $courseid ? "&courseid=$courseid" : '';
 
         if ($graphs) {
             foreach ($graphs as $g) {
                 $output .= '<div class="centerpara">';
-                $output .= ' <img src="'.$g.'" alt="'.$this->config->name.'"><br />';
+                $output .= ' <img src="' . $g . $courseidparam . '" alt="'.$this->config->name.'"><br />';
                 $output .= '</div>';
             }
         }
@@ -698,7 +699,7 @@ class report_base {
         }
     }
 
-    public function print_report_page(\moodle_page $moodlepage) {
+    public function print_report_page(\moodle_page $moodlepage, $courseid = 0) {
         global $DB, $CFG, $OUTPUT, $USER;
 
         if ($this->config->displayprintbutton) {
@@ -729,7 +730,7 @@ class report_base {
         if ($this->finalreport->table && !empty($this->finalreport->table->data[0])) {
 
             echo "<div id=\"printablediv\">\n";
-            $this->print_graphs();
+            $this->print_graphs(false, $courseid);
 
             if ($this->config->jsordering) {
                 $this->add_jsordering($moodlepage);

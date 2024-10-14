@@ -113,7 +113,7 @@ if (!$download) {
     }
 
     // Print the report HTML.
-    $reportclass->print_report_page($PAGE);
+    $reportclass->print_report_page($PAGE, $courseid);
 
 } else {
     // Large exports are likely to take their time and memory.
