@@ -85,8 +85,6 @@ abstract class report_base {
      * @var null
      */
     public $filterform = null;
-    public $config;
-    public $currentcourseid;
 
     /**
      * @var int
