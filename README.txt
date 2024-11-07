@@ -5,13 +5,10 @@ See http://docs.moodle.org/en/blocks/configurable_reports/
 Also http://moodle.org/mod/data/view.php?d=13&rid=4283
 
 Author: Juan Leyva
-<http://moodle.org/user/profile.php?id=49568>
 <http://twitter.com/jleyvadelgado>
-<http://sites.google.com/site/mooconsole/>
-<http://moodle-es.blogspot.com>
-<http://openlearningtech.blogspot.com>
 
 Thanks to:
+Sara Arjona for being a co-maintainer
 Nadav Kavalerchik for developing amazing new features
 Ivan Breziansky for translating the block to slovak language
 Iñaki Arenaza for translating the block documentation to spanish
@@ -26,6 +23,38 @@ By Tim Hunt
 
 
 VERSIONS HISTORY
+
+4.5.0 (2024051300) for Moodle 4.5
+Release date: 06.10.2024
+----------------------------------------------------------------------
+
+## What's Changed
+* fix webservice calls when missing user by @danielneis in https://github.com/jleyva/moodle-block_configurablereports/pull/250
+* Issue with downloading a filtered report by @luukverhoeven in https://github.com/jleyva/moodle-block_configurablereports/pull/248
+* Apply format_string on the breadcrumb navigation by @golenkovm in https://github.com/jleyva/moodle-block_configurablereports/pull/181
+* csv delimiter settings by @Tsheke in https://github.com/jleyva/moodle-block_configurablereports/pull/214
+* Set current courseid when importing a custom SQL report. by @reskit in https://github.com/jleyva/moodle-block_configurablereports/pull/223
+* Fixes jleyva/moodle-block_configurablereports#147 by @marcelorhmaia in https://github.com/jleyva/moodle-block_configurablereports/pull/231
+* User Profile Fields Language Filter Fix by @sameer-ah in https://github.com/jleyva/moodle-block_configurablereports/pull/189
+* Fix 201: Process report names / filenames through Moodle filters by @michael-milette in https://github.com/jleyva/moodle-block_configurablereports/pull/238
+* FIX-226: Stop getting string from report_customsql plugin by @michael-milette in https://github.com/jleyva/moodle-block_configurablereports/pull/227
+* Set BOM for CSV export closes #198 by @mvaraujo in https://github.com/jleyva/moodle-block_configurablereports/pull/199
+* Provide support for SYLK export #200 by @mvaraujo in https://github.com/jleyva/moodle-block_configurablereports/pull/203
+* Fix issue #62 Error with apostrophe by @TomoTsuyuki in https://github.com/jleyva/moodle-block_configurablereports/pull/211
+* Export multilanguage support by @Tsheke in https://github.com/jleyva/moodle-block_configurablereports/pull/215
+* Add embed options by @keevan in https://github.com/jleyva/moodle-block_configurablereports/pull/182
+* fix variable redeclaration by @danielneis in https://github.com/jleyva/moodle-block_configurablereports/pull/256
+
+## New Contributors
+* @luukverhoeven made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/248
+* @golenkovm made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/181
+* @Tsheke made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/214
+* @reskit made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/223
+* @marcelorhmaia made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/231
+* @sameer-ah made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/189
+* @TomoTsuyuki made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/211
+* @keevan made their first contribution in https://github.com/jleyva/moodle-block_configurablereports/pull/182
+
 
 4.1.0 (2023120600) for Moodle 4.1
 Release date: 06.12.2023
@@ -59,8 +88,6 @@ Thanks to Lesterhuis Training & Consultancy for the contribution / updated by Ld
   * Move cron to a scheduled task
   * phpcpd and phpdocs checks in CI
   * Make CSS strict should only affect this plugin!
-
-----------------------------------------------------------------------
 
 
 3.9.0 (2019122000) for Moodle 3.4, 3.5, 3.6, 3.7, 3.8, 3.9
