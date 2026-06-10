@@ -29,7 +29,15 @@ $functions = [
     'block_configurable_reports_get_report_data' => [
         'classname' => 'block_configurable_reports\external',
         'methodname' => 'get_report_data',
-        'description' => 'Return data as JSON for given report ID.',
+        'description' => 'Return data as JSON for given report ID, optionally applying dynamic SQL parameters.',
+        'type' => 'read',
+        'ajax' => true,
+    ],
+
+    'block_configurable_reports_get_dynamic_reports' => [
+        'classname' => 'block_configurable_reports\external',
+        'methodname' => 'get_dynamic_reports',
+        'description' => 'Returns available SQL reports and their dynamic parameters.',
         'type' => 'read',
         'ajax' => true,
     ],

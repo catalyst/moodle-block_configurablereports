@@ -32,8 +32,12 @@ use context_course;
 use context_system;
 use external_api;
 use external_function_parameters;
+use external_multiple_structure;
 use external_single_structure;
 use external_value;
+use block_configurable_reports\local\dynamic_report;
+use block_configurable_reports\local\dynamic_sql;
+use moodle_exception;
 
 /**
  * This is the external API for this component.
@@ -52,6 +56,15 @@ class external extends external_api {
             [
                 'reportid' => new external_value(PARAM_INT, 'The report id', VALUE_REQUIRED),
                 'courseid' => new external_value(PARAM_INT, 'The course id', VALUE_DEFAULT, 1),
+                'parameters' => new external_multiple_structure(
+                    new external_single_structure([
+                        'name' => new external_value(PARAM_ALPHANUMEXT, 'Dynamic parameter name'),
+                        'value' => new external_value(PARAM_RAW, 'Dynamic parameter value'),
+                    ]),
+                    'Dynamic report parameters',
+                    VALUE_DEFAULT,
+                    []
+                ),
             ]
         );
     }
@@ -61,14 +74,15 @@ class external extends external_api {
      *
      * @param int $reportid the report id
      * @param int $courseid course id (default to site)
+     * @param array $parameters dynamic report parameters
      * @return array An array with a 'data' JSON string and a 'warnings' string
      */
-    public static function get_report_data($reportid, int $courseid = 1): array {
+    public static function get_report_data($reportid, int $courseid = 1, array $parameters = []): array {
         global $CFG, $DB, $USER;
 
         $params = self::validate_parameters(
             self::get_report_data_parameters(),
-            ['reportid' => $reportid, 'courseid' => $courseid]
+            ['reportid' => $reportid, 'courseid' => $courseid, 'parameters' => $parameters]
         );
 
         if ($courseid === SITEID) {
@@ -92,6 +106,12 @@ class external extends external_api {
             $reportclass = new $reportclassname($report);
             if (!$reportclass->check_permissions($USER->id, $context)) {
                 $warnings = get_string('badpermissions', 'block_configurable_reports');
+            }
+
+            if ($report->type === 'sql' && self::has_dynamic_sql_placeholders($report)) {
+                [$report, $queryparams] = self::apply_dynamic_sql_to_report($report, $parameters);
+                $reportclass = new dynamic_report($report);
+                $reportclass->set_query_parameters($queryparams);
             }
 
             $reportclass->create_report();
@@ -124,5 +144,171 @@ class external extends external_api {
                 'warnings' => new external_value(PARAM_TEXT, 'Warning message'),
             ]
         );
+    }
+
+
+    /**
+     * get_dynamic_reports parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_dynamic_reports_parameters(): external_function_parameters {
+        return new external_function_parameters(
+            [
+                'courseid' => new external_value(PARAM_INT, 'The course id', VALUE_DEFAULT, SITEID),
+            ]
+        );
+    }
+
+    /**
+     * Returns SQL reports available to the current user and their dynamic parameters.
+     *
+     * @param int $courseid course id
+     * @return array
+     */
+    public static function get_dynamic_reports(int $courseid = SITEID): array {
+        global $CFG, $DB, $USER;
+
+        $params = self::validate_parameters(
+            self::get_dynamic_reports_parameters(),
+            ['courseid' => $courseid]
+        );
+        $courseid = $params['courseid'];
+
+        if ($courseid === SITEID) {
+            $context = context_system::instance();
+        } else {
+            $context = context_course::instance($courseid);
+        }
+
+        self::validate_context($context);
+
+        require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
+        require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
+
+        $reports = $DB->get_records(
+            'block_configurable_reports',
+            ['type' => 'sql'],
+            'name ASC'
+        );
+
+        $result = [];
+        $warnings = [];
+        foreach ($reports as $report) {
+            $reportclassfile = $CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php';
+            require_once($reportclassfile);
+            $reportclassname = 'report_' . $report->type;
+            if (!class_exists($reportclassname)) {
+                $warnings[] = [
+                    'item' => 'report',
+                    'itemid' => $report->id,
+                    'warningcode' => 'missingreportclass',
+                    'message' => get_string('missingreportclass', 'block_configurable_reports'),
+                ];
+                continue;
+            }
+
+            $reportclass = new $reportclassname($report);
+            if (!$reportclass->check_permissions($USER->id, $context)) {
+                continue;
+            }
+
+            $components = cr_unserialize($report->components);
+            if (empty($components['customsql']['config']->querysql)) {
+                continue;
+            }
+
+            $result[] = [
+                'id' => $report->id,
+                'name' => $report->name,
+                'summary' => $report->summary ?? '',
+                'courseid' => $report->courseid ?? 0,
+                'type' => $report->type,
+                'parameters' => dynamic_sql::extract_parameters($components['customsql']['config']->querysql),
+            ];
+        }
+
+        return [
+            'reports' => $result,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * get_dynamic_reports return.
+     *
+     * @return external_single_structure
+     */
+    public static function get_dynamic_reports_returns(): external_single_structure {
+        return new external_single_structure(
+            [
+                'reports' => new external_multiple_structure(
+                    new external_single_structure([
+                        'id' => new external_value(PARAM_INT, 'Report ID'),
+                        'name' => new external_value(PARAM_TEXT, 'Report name'),
+                        'summary' => new external_value(PARAM_RAW, 'Report summary'),
+                        'courseid' => new external_value(PARAM_INT, 'Report course ID'),
+                        'type' => new external_value(PARAM_ALPHANUMEXT, 'Report type'),
+                        'parameters' => new external_multiple_structure(
+                            new external_single_structure([
+                                'name' => new external_value(PARAM_ALPHANUMEXT, 'Dynamic parameter name'),
+                                'field' => new external_value(PARAM_TEXT, 'SQL field used by the parameter'),
+                                'operator' => new external_value(PARAM_RAW, 'SQL operator'),
+                                'placeholder' => new external_value(PARAM_RAW, 'Full SQL placeholder'),
+                                'required' => new external_value(PARAM_BOOL, 'Whether the parameter is required'),
+                            ])
+                        ),
+                    ])
+                ),
+                'warnings' => new external_multiple_structure(
+                    new external_single_structure([
+                        'item' => new external_value(PARAM_TEXT, 'Warning item type'),
+                        'itemid' => new external_value(PARAM_INT, 'Warning item ID'),
+                        'warningcode' => new external_value(PARAM_TEXT, 'Warning code'),
+                        'message' => new external_value(PARAM_TEXT, 'Warning message'),
+                    ])
+                ),
+            ]
+        );
+    }
+
+    /**
+     * Applies dynamic SQL parameters to the report object in memory.
+     *
+     * This does not save the modified SQL back to the database.
+     *
+     * @param object $report Configurable Reports DB record.
+     * @param array $parameters Dynamic parameters.
+     * @return array Modified in-memory report object and DML query parameters.
+     */
+    private static function apply_dynamic_sql_to_report(object $report, array $parameters): array {
+        $components = cr_unserialize($report->components);
+
+        if (empty($components['customsql']['config']->querysql)) {
+            throw new moodle_exception('missingcustomsql', 'block_configurable_reports');
+        }
+
+        $sql = $components['customsql']['config']->querysql;
+        [$sql, $queryparams] = dynamic_sql::apply_parameters($sql, $parameters);
+
+        $components['customsql']['config']->querysql = $sql;
+        $report->components = cr_serialize($components);
+
+        return [$report, $queryparams];
+    }
+
+    /**
+     * Checks whether the SQL report contains dynamic placeholders.
+     *
+     * @param object $report Configurable Reports DB record.
+     * @return bool
+     */
+    private static function has_dynamic_sql_placeholders(object $report): bool {
+        $components = cr_unserialize($report->components);
+        if (empty($components['customsql']['config']->querysql)) {
+            return false;
+        }
+
+        return stripos($components['customsql']['config']->querysql, '%%DYNAMIC_') !== false;
     }
 }
