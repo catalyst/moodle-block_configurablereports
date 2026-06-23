@@ -589,6 +589,8 @@ arbitrary code. SQL code execution should be disable to only allow SQL queries f
 be disabled in your config.php file by setting $CFG->block_configurable_reports_enable_sql_execution to 0';
 $string['csvdelimiter'] = 'CSV delimiter';
 $string['csvdelimiterinfo'] = 'CSV delimiter: "colon" for ":", "comma" for ",", semicolon for ";",  "tab" for "\t" and "cfg" for character configured in "CFG->CSV_DELIMITER" of the config.php file.';
+$string['duplicatedynamicparameter'] = 'A dynamic parameter name can only be used once per report.';
+$string['invaliddynamicparameters'] = 'The report has invalid dynamic SQL parameters.';
 $string['missingcustomsql'] = 'The report does not contain custom SQL.';
 $string['missingreportclass'] = 'The Configurable Reports report class was not found.';
 $string['missingreportclassfile'] = 'The Configurable Reports report class file was not found.';

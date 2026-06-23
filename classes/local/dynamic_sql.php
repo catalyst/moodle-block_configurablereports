@@ -29,7 +29,7 @@ use moodle_exception;
 final class dynamic_sql {
     /** @var string Regular expression matching supported dynamic placeholders. */
     private const PLACEHOLDER_PATTERN =
-        '/%%DYNAMIC_([A-Z0-9_]+):([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)?)(?::(<=|>=|=|<|>|~|in))?%%/i';
+        '/%%DYNAMIC_([A-Z0-9_-]+):([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)?)(?::(<=|>=|=|<|>|~|in))?%%/i';
 
     /** @var string Regular expression matching any remaining dynamic placeholder. */
     private const UNRESOLVED_PLACEHOLDER_PATTERN = '/%%DYNAMIC_[^%]+%%/i';
@@ -41,7 +41,7 @@ final class dynamic_sql {
      * @return array
      */
     public static function extract_parameters(string $sql): array {
-        preg_match_all(self::PLACEHOLDER_PATTERN, $sql, $matches, PREG_SET_ORDER);
+        $matches = self::get_placeholder_matches($sql);
 
         $parameters = [];
         foreach ($matches as $match) {
@@ -68,13 +68,14 @@ final class dynamic_sql {
     public static function apply_parameters(string $sql, array $parameters): array {
         global $remotedb;
 
+        self::get_placeholder_matches($sql);
         $parammap = self::normalise_parameters($parameters);
         $queryparams = [];
         $paramindex = 0;
 
         $sql = preg_replace_callback(
             self::PLACEHOLDER_PATTERN,
-            static function(array $matches) use ($parammap, &$queryparams, &$paramindex, $remotedb): string {
+            static function (array $matches) use ($parammap, &$queryparams, &$paramindex, $remotedb): string {
                 $name = strtoupper($matches[1]);
                 if (!array_key_exists($name, $parammap) || $parammap[$name] === '') {
                     return '';
@@ -128,15 +129,23 @@ final class dynamic_sql {
         }
 
         if ($operator === 'in') {
-            $conditions = [];
+            $items = [];
             foreach (preg_split('/(?<!\\\\),/', (string) $value) as $item) {
                 $item = str_replace('\\,', ',', trim(trim($item), '"\''));
                 if ($item !== '') {
-                    $conditions[] = "{$field} = " . self::add_query_parameter($item, $queryparams, $paramindex);
+                    $items[] = $item;
                 }
             }
 
-            return empty($conditions) ? '' : ' AND (' . implode(' OR ', $conditions) . ')';
+            if (empty($items)) {
+                return '';
+            }
+
+            $prefix = 'blockdynamicin' . $paramindex++;
+            [$insql, $inparams] = $database->get_in_or_equal($items, SQL_PARAMS_NAMED, $prefix);
+            $queryparams += $inparams;
+
+            return " AND {$field} {$insql}";
         }
 
         return " AND {$field} {$operator} " . self::add_query_parameter(trim((string) $value), $queryparams, $paramindex);
@@ -167,13 +176,38 @@ final class dynamic_sql {
         $map = [];
         foreach ($parameters as $parameter) {
             $name = strtoupper(trim($parameter['name']));
-            if (!preg_match('/^[A-Z0-9_]+$/', $name)) {
+            if (!preg_match('/^[A-Z0-9_-]+$/', $name)) {
                 throw new invalid_parameter_exception('Invalid dynamic parameter name: ' . $name);
+            }
+            if (array_key_exists($name, $map)) {
+                throw new invalid_parameter_exception('Duplicate dynamic parameter name: ' . $name);
             }
 
             $map[$name] = $parameter['value'];
         }
 
         return $map;
+    }
+
+    /**
+     * Returns supported dynamic placeholders after validating their names are unique.
+     *
+     * @param string $sql SQL query.
+     * @return array
+     */
+    private static function get_placeholder_matches(string $sql): array {
+        preg_match_all(self::PLACEHOLDER_PATTERN, $sql, $matches, PREG_SET_ORDER);
+
+        $names = [];
+        foreach ($matches as $match) {
+            $name = strtoupper($match[1]);
+            if (array_key_exists($name, $names)) {
+                throw new moodle_exception('duplicatedynamicparameter', 'block_configurable_reports');
+            }
+
+            $names[$name] = true;
+        }
+
+        return $matches;
     }
 }

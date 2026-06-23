@@ -129,6 +129,11 @@ class customsql_form extends moodleform {
         $sql = $data['querysql'];
         $sql = trim($sql);
 
+        if (!$this->validate_dynamic_parameters($sql)) {
+            $errors['querysql'] = get_string('duplicatedynamicparameter', 'block_configurable_reports');
+            return $errors;
+        }
+
         // Simple test to avoid evil stuff in the SQL.
         $regex = '/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i';
         if (preg_match($regex, $sql)) {
@@ -179,6 +184,11 @@ class customsql_form extends moodleform {
         $sql = $data['querysql'];
         $sql = trim($sql);
 
+        if (!$this->validate_dynamic_parameters($sql)) {
+            $errors['querysql'] = get_string('duplicatedynamicparameter', 'block_configurable_reports');
+            return $errors;
+        }
+
         if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
             // Only allow INSERT|INTO|CREATE in low security.
             $errors['querysql'] = get_string('notallowedwords', 'block_configurable_reports');
@@ -206,5 +216,21 @@ class customsql_form extends moodleform {
         }
 
         return $errors;
+    }
+
+    /**
+     * Validates dynamic SQL placeholder names.
+     *
+     * @param string $sql SQL query.
+     * @return bool
+     */
+    private function validate_dynamic_parameters(string $sql): bool {
+        try {
+            \block_configurable_reports\local\dynamic_sql::extract_parameters($sql);
+        } catch (moodle_exception $e) {
+            return false;
+        }
+
+        return true;
     }
 }

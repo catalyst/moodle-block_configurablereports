@@ -34,10 +34,10 @@ $functions = [
         'ajax' => true,
     ],
 
-    'block_configurable_reports_get_dynamic_reports' => [
+    'block_configurable_reports_get_reports' => [
         'classname' => 'block_configurable_reports\external',
-        'methodname' => 'get_dynamic_reports',
-        'description' => 'Returns available SQL reports and their dynamic parameters.',
+        'methodname' => 'get_reports',
+        'description' => 'Returns available reports and their dynamic parameters.',
         'type' => 'read',
         'ajax' => true,
     ],

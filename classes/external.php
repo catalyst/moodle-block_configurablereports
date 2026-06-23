@@ -77,7 +77,7 @@ class external extends external_api {
      * @param array $parameters dynamic report parameters
      * @return array An array with a 'data' JSON string and a 'warnings' string
      */
-    public static function get_report_data($reportid, int $courseid = 1, array $parameters = []): array {
+    public static function get_report_data(int $reportid, int $courseid = 1, array $parameters = []): array {
         global $CFG, $DB, $USER;
 
         $params = self::validate_parameters(
@@ -105,7 +105,10 @@ class external extends external_api {
             $reportclassname = 'report_' . $report->type;
             $reportclass = new $reportclassname($report);
             if (!$reportclass->check_permissions($USER->id, $context)) {
-                $warnings = get_string('badpermissions', 'block_configurable_reports');
+                return [
+                    'data' => json_encode($json, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                    'warnings' => get_string('badpermissions', 'block_configurable_reports'),
+                ];
             }
 
             if ($report->type === 'sql' && self::has_dynamic_sql_placeholders($report)) {
@@ -148,11 +151,11 @@ class external extends external_api {
 
 
     /**
-     * get_dynamic_reports parameters.
+     * get_reports parameters.
      *
      * @return external_function_parameters
      */
-    public static function get_dynamic_reports_parameters(): external_function_parameters {
+    public static function get_reports_parameters(): external_function_parameters {
         return new external_function_parameters(
             [
                 'courseid' => new external_value(PARAM_INT, 'The course id', VALUE_DEFAULT, SITEID),
@@ -161,16 +164,16 @@ class external extends external_api {
     }
 
     /**
-     * Returns SQL reports available to the current user and their dynamic parameters.
+     * Returns reports available to the current user and their dynamic parameters.
      *
      * @param int $courseid course id
      * @return array
      */
-    public static function get_dynamic_reports(int $courseid = SITEID): array {
+    public static function get_reports(int $courseid = SITEID): array {
         global $CFG, $DB, $USER;
 
         $params = self::validate_parameters(
-            self::get_dynamic_reports_parameters(),
+            self::get_reports_parameters(),
             ['courseid' => $courseid]
         );
         $courseid = $params['courseid'];
@@ -186,16 +189,22 @@ class external extends external_api {
         require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
         require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
 
-        $reports = $DB->get_records(
-            'block_configurable_reports',
-            ['type' => 'sql'],
-            'name ASC'
-        );
+        $reports = $DB->get_records('block_configurable_reports', null, 'name ASC');
 
         $result = [];
         $warnings = [];
         foreach ($reports as $report) {
             $reportclassfile = $CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php';
+            if (!file_exists($reportclassfile)) {
+                $warnings[] = [
+                    'item' => 'report',
+                    'itemid' => $report->id,
+                    'warningcode' => 'missingreportclassfile',
+                    'message' => get_string('missingreportclassfile', 'block_configurable_reports'),
+                ];
+                continue;
+            }
+
             require_once($reportclassfile);
             $reportclassname = 'report_' . $report->type;
             if (!class_exists($reportclassname)) {
@@ -213,9 +222,22 @@ class external extends external_api {
                 continue;
             }
 
-            $components = cr_unserialize($report->components);
-            if (empty($components['customsql']['config']->querysql)) {
-                continue;
+            $parameters = [];
+            if ($report->type === 'sql') {
+                $components = cr_unserialize($report->components);
+                if (!empty($components['customsql']['config']->querysql)) {
+                    try {
+                        $parameters = dynamic_sql::extract_parameters($components['customsql']['config']->querysql);
+                    } catch (moodle_exception $e) {
+                        $warnings[] = [
+                            'item' => 'report',
+                            'itemid' => $report->id,
+                            'warningcode' => 'invaliddynamicparameters',
+                            'message' => get_string('invaliddynamicparameters', 'block_configurable_reports'),
+                        ];
+                        continue;
+                    }
+                }
             }
 
             $result[] = [
@@ -223,8 +245,9 @@ class external extends external_api {
                 'name' => $report->name,
                 'summary' => $report->summary ?? '',
                 'courseid' => $report->courseid ?? 0,
+                'global' => !empty($report->global),
                 'type' => $report->type,
-                'parameters' => dynamic_sql::extract_parameters($components['customsql']['config']->querysql),
+                'parameters' => $parameters,
             ];
         }
 
@@ -235,11 +258,11 @@ class external extends external_api {
     }
 
     /**
-     * get_dynamic_reports return.
+     * get_reports return.
      *
      * @return external_single_structure
      */
-    public static function get_dynamic_reports_returns(): external_single_structure {
+    public static function get_reports_returns(): external_single_structure {
         return new external_single_structure(
             [
                 'reports' => new external_multiple_structure(
@@ -248,6 +271,7 @@ class external extends external_api {
                         'name' => new external_value(PARAM_TEXT, 'Report name'),
                         'summary' => new external_value(PARAM_RAW, 'Report summary'),
                         'courseid' => new external_value(PARAM_INT, 'Report course ID'),
+                        'global' => new external_value(PARAM_BOOL, 'Whether the report is global'),
                         'type' => new external_value(PARAM_ALPHANUMEXT, 'Report type'),
                         'parameters' => new external_multiple_structure(
                             new external_single_structure([
