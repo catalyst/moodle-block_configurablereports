@@ -189,7 +189,13 @@ class external extends external_api {
         require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
         require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
 
-        $reports = $DB->get_records('block_configurable_reports', null, 'name ASC');
+        $reports = $DB->get_records_sql(
+            "SELECT r.*
+               FROM {block_configurable_reports} r
+          LEFT JOIN {course} c ON c.id = r.courseid
+              WHERE r.global = 1 OR c.id IS NOT NULL
+           ORDER BY r.name ASC"
+        );
 
         $result = [];
         $warnings = [];
@@ -218,7 +224,13 @@ class external extends external_api {
             }
 
             $reportclass = new $reportclassname($report);
-            $reportcontext = $report->global ? context_system::instance() : context_course::instance($report->courseid);
+            $reportcontext = $report->global
+                ? context_system::instance()
+                : context_course::instance($report->courseid, IGNORE_MISSING);
+            if (!$reportcontext) {
+                continue;
+            }
+
             if (!$reportclass->check_permissions($USER->id, $reportcontext)) {
                 continue;
             }
