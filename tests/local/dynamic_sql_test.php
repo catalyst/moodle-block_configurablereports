@@ -28,6 +28,16 @@ use moodle_exception;
  */
 final class dynamic_sql_test extends \advanced_testcase {
     /**
+     * Sets the database used to expand dynamic SQL parameters.
+     */
+    protected function setUp(): void {
+        global $DB, $remotedb;
+
+        parent::setUp();
+        $remotedb = $DB;
+    }
+
+    /**
      * Tests the extraction of supported placeholder metadata.
      */
     public function test_extract_parameters(): void {
@@ -56,10 +66,6 @@ final class dynamic_sql_test extends \advanced_testcase {
      * Tests replacement and quoting of submitted values.
      */
     public function test_apply_parameters(): void {
-        global $DB, $remotedb;
-
-        $remotedb = $DB;
-
         $sql = 'SELECT * FROM prefix_user u WHERE 1 = 1 '
             . '%%DYNAMIC_USER:u.id:=%% %%DYNAMIC_NAME:u.username:=%% %%DYNAMIC_UNUSED:u.deleted:=%%';
 
@@ -78,11 +84,8 @@ final class dynamic_sql_test extends \advanced_testcase {
      * Tests that IN placeholders use distinct query parameter names.
      */
     public function test_apply_parameters_with_multiple_in_conditions(): void {
-        global $DB, $remotedb;
-
-        $remotedb = $DB;
         $sql = 'SELECT * FROM prefix_user u WHERE 1 = 1 '
-            . '%%DYNAMIC_IDS:u.id:in%% %%DYNAMIC_DELETED:u.deleted:in%%';
+            . '%%DYNAMIC_IDS:u.id:in%% %%DYNAMIC_DELETED:u.deleted:IN%%';
 
         [$actual, $params] = dynamic_sql::apply_parameters($sql, [
             ['name' => 'IDS', 'value' => '1,2'],
@@ -100,9 +103,6 @@ final class dynamic_sql_test extends \advanced_testcase {
      * Tests rejection of malformed placeholders.
      */
     public function test_apply_parameters_rejects_malformed_placeholder(): void {
-        global $DB, $remotedb;
-
-        $remotedb = $DB;
         $this->expectException(moodle_exception::class);
         $this->expectExceptionMessage(get_string('unresolvedplaceholder', 'block_configurable_reports'));
 
