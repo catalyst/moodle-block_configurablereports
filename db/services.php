@@ -38,6 +38,7 @@ $functions = [
         'classname' => 'block_configurable_reports\external',
         'methodname' => 'get_reports',
         'description' => 'Returns available reports and their dynamic parameters.',
+        'capabilities' => 'block/configurable_reports:viewreports',
         'type' => 'read',
         'ajax' => true,
     ],

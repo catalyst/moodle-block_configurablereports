@@ -47,7 +47,7 @@ final class dynamic_report extends \report_sql {
 
         $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
         $reportlimit = get_config('block_configurable_reports', 'reportlimit');
-        if (empty($reportlimit) || $reportlimit === '0') {
+        if (empty($reportlimit)) {
             $reportlimit = BLOCK_CONFIGURABLE_REPORTS_MAX_RECORDS;
         }
 

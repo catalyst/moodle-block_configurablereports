@@ -218,7 +218,8 @@ class external extends external_api {
             }
 
             $reportclass = new $reportclassname($report);
-            if (!$reportclass->check_permissions($USER->id, $context)) {
+            $reportcontext = $report->global ? context_system::instance() : context_course::instance($report->courseid);
+            if (!$reportclass->check_permissions($USER->id, $reportcontext)) {
                 continue;
             }
 
@@ -304,6 +305,8 @@ class external extends external_api {
      * @param object $report Configurable Reports DB record.
      * @param array $parameters Dynamic parameters.
      * @return array Modified in-memory report object and DML query parameters.
+     * @throws \invalid_parameter_exception If a submitted parameter is invalid or duplicated.
+     * @throws moodle_exception If the report has no custom SQL or contains unresolved dynamic placeholders.
      */
     private static function apply_dynamic_sql_to_report(object $report, array $parameters): array {
         $components = cr_unserialize($report->components);

@@ -49,7 +49,7 @@ final class dynamic_sql {
             $parameters[$name] = [
                 'name' => $name,
                 'field' => $match[2],
-                'operator' => $match[3] ?? '~',
+                'operator' => strtolower($match[3] ?? '~'),
                 'placeholder' => $match[0],
                 'required' => false,
             ];
@@ -64,6 +64,8 @@ final class dynamic_sql {
      * @param string $sql SQL query.
      * @param array $parameters Submitted parameters.
      * @return array SQL query and DML parameters.
+     * @throws invalid_parameter_exception If a submitted parameter is invalid or duplicated.
+     * @throws moodle_exception If the SQL contains unresolved dynamic placeholders.
      */
     public static function apply_parameters(string $sql, array $parameters): array {
         global $remotedb;
@@ -83,7 +85,7 @@ final class dynamic_sql {
 
                 return self::get_sql_condition(
                     $matches[2],
-                    $matches[3] ?? '~',
+                    strtolower($matches[3] ?? '~'),
                     $parammap[$name],
                     $queryparams,
                     $paramindex,
@@ -171,6 +173,7 @@ final class dynamic_sql {
      *
      * @param array $parameters Submitted parameters.
      * @return array
+     * @throws invalid_parameter_exception If a submitted parameter is invalid or duplicated.
      */
     private static function normalise_parameters(array $parameters): array {
         $map = [];
@@ -194,6 +197,7 @@ final class dynamic_sql {
      *
      * @param string $sql SQL query.
      * @return array
+     * @throws moodle_exception If the SQL contains duplicate dynamic placeholder names.
      */
     private static function get_placeholder_matches(string $sql): array {
         preg_match_all(self::PLACEHOLDER_PATTERN, $sql, $matches, PREG_SET_ORDER);
