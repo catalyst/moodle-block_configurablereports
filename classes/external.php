@@ -156,35 +156,18 @@ class external extends external_api {
      * @return external_function_parameters
      */
     public static function get_reports_parameters(): external_function_parameters {
-        return new external_function_parameters(
-            [
-                'courseid' => new external_value(PARAM_INT, 'The course id', VALUE_DEFAULT, SITEID),
-            ]
-        );
+        return new external_function_parameters([]);
     }
 
     /**
      * Returns reports available to the current user and their dynamic parameters.
      *
-     * @param int $courseid course id
      * @return array
      */
-    public static function get_reports(int $courseid = SITEID): array {
+    public static function get_reports(): array {
         global $CFG, $DB, $USER;
 
-        $params = self::validate_parameters(
-            self::get_reports_parameters(),
-            ['courseid' => $courseid]
-        );
-        $courseid = $params['courseid'];
-
-        if ($courseid === SITEID) {
-            $context = context_system::instance();
-        } else {
-            $context = context_course::instance($courseid);
-        }
-
-        self::validate_context($context);
+        self::validate_parameters(self::get_reports_parameters(), []);
 
         require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
         require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
@@ -200,6 +183,19 @@ class external extends external_api {
         $result = [];
         $warnings = [];
         foreach ($reports as $report) {
+            $reportcontext = $report->global
+                ? context_system::instance()
+                : context_course::instance($report->courseid, IGNORE_MISSING);
+            if (!$reportcontext) {
+                continue;
+            }
+
+            try {
+                self::validate_context($reportcontext);
+            } catch (moodle_exception $e) {
+                continue;
+            }
+
             $reportclassfile = $CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php';
             if (!file_exists($reportclassfile)) {
                 $warnings[] = [
@@ -224,13 +220,6 @@ class external extends external_api {
             }
 
             $reportclass = new $reportclassname($report);
-            $reportcontext = $report->global
-                ? context_system::instance()
-                : context_course::instance($report->courseid, IGNORE_MISSING);
-            if (!$reportcontext) {
-                continue;
-            }
-
             if (!$reportclass->check_permissions($USER->id, $reportcontext)) {
                 continue;
             }
