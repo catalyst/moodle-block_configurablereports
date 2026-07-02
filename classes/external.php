@@ -149,7 +149,6 @@ class external extends external_api {
         );
     }
 
-
     /**
      * get_reports parameters.
      *
