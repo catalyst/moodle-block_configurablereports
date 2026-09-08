@@ -5,12 +5,11 @@ on: [push, pull_request]
 jobs:
   test:
     uses: catalyst/catalyst-moodle-workflows/.github/workflows/ci.yml@main
-    secrets:
-      # Required if you plan to publish (uncomment the below)
-      moodle_org_token: ${{ secrets.MOODLE_ORG_TOKEN }}
+    secrets: inherit
     with:
       disable_grunt: true
       disable_phpunit: true
       disable_release : true
       release_branches: main
+      enable_composer_publish: true
       min_php : 7.4
