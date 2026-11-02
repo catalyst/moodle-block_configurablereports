@@ -265,7 +265,11 @@ abstract class report_base {
             }
 
             require_once('filter_form.php');
-            $filterform = new report_edit_filter_form(null, $this);
+            $formurl = new moodle_url('/blocks/configurable_reports/viewreport.php', [
+                'id' => $this->config->id,
+                'courseid' => $this->config->courseid,
+            ]);
+            $filterform = new report_edit_filter_form($formurl->out(false), $this);
 
             $filterform->set_data($formdata);
 
