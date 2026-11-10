@@ -291,6 +291,7 @@ $string['badconditionexpr'] = "Incorrect condition expression";
 
 $string['notallowedwords'] = "Not allowed words";
 $string['nosemicolon'] = "No semicolon";
+$string['notselectquery'] = "Only queries that read data are allowed: the query has to start with SELECT or WITH";
 $string['noexplicitprefix'] = "No explicit prefix";
 $string['queryfailed'] = 'Query failed <code><pre>{$a}</pre></code>';
 $string['norowsreturned'] = "No rows returned";
