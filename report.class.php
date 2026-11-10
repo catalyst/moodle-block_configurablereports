@@ -114,11 +114,17 @@ abstract class report_base {
         $this->currentcourseid = $this->config->courseid;
         $this->init();
 
-        // Use a custom $DB (and not current system's $DB)
-        // TODO: major security issue.
+        // The following enforces a remote connection be used if 'Use remote
+        // connection' is enabled, allowing for admin-enforced isolation,
+        // unlike previously where it might have fallen back to use the main
+        // $DB connection, and fails if remote settings are missing.
+        //
+        // WARN: Best-practices still apply. The reports created by users
+        // should route through a connection fit for purpose (e.g. read only,
+        // appropriate access, can view only certain tables, etc.). Also, with
+        // this setting OFF, a user can currently still target the main $DB
+        // connection for their reports.
         $alwaysuseremote = get_config('block_configurable_reports', 'alwaysuseremote');
-
-        // Always use remote db connection if the flag is checked.
         if ($alwaysuseremote || $this->config->remote) {
             // Check connection settings are set, otherwise fail early.
             $remotedbhost = get_config('block_configurable_reports', 'dbhost');
