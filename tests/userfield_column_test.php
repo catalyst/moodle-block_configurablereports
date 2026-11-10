@@ -60,6 +60,7 @@ final class userfield_column_test extends advanced_testcase {
     /**
      * The date columns of the user table are shown as dates, not as timestamps.
      *
+     * @dataProvider date_columns_provider
      * @param string $column
      */
     #[DataProvider('date_columns_provider')]
