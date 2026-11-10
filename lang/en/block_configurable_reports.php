@@ -459,6 +459,9 @@ $string['dbuser'] = "DB Username";
 $string['dbuserinfo'] = "Remote Database username (should have SELECT privileges on above DB)";
 $string['dbpass'] = "DB Password";
 $string['dbpassinfo'] = "Remote Database password (for above username)";
+$string['alwaysuseremote'] = "Use remote connection";
+$string['alwaysuseremoteinfo'] = "If checked, will always try to use remote database connection. If unchecked, will only use remote db connection if the instance has 'run on remote db' checked.";
+$string['remotedbnotconfigured'] = 'Remote database connection is not configured. Please contact your Moodle administrator to configure it.';
 
 $string['totalrecords'] = 'Total record count = {$a->totalrecords}';
 $string['lastexecutiontime'] = 'Execution time = {$a} (Sec)';

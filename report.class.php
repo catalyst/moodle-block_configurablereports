@@ -116,15 +116,19 @@ abstract class report_base {
 
         // Use a custom $DB (and not current system's $DB)
         // TODO: major security issue.
-        $remotedbhost = get_config('block_configurable_reports', 'dbhost');
-        $remotedbname = get_config('block_configurable_reports', 'dbname');
-        $remotedbuser = get_config('block_configurable_reports', 'dbuser');
-        $remotedbpass = get_config('block_configurable_reports', 'dbpass');
+        $alwaysuseremote = get_config('block_configurable_reports', 'alwaysuseremote');
 
-        if (
-            !empty($remotedbhost) && !empty($remotedbname) && !empty($remotedbuser) && !empty($remotedbpass) &&
-            $this->config->remote
-        ) {
+        // Always use remote db connection if the flag is checked.
+        if ($alwaysuseremote || $this->config->remote) {
+            // Check connection settings are set, otherwise fail early.
+            $remotedbhost = get_config('block_configurable_reports', 'dbhost');
+            $remotedbname = get_config('block_configurable_reports', 'dbname');
+            $remotedbuser = get_config('block_configurable_reports', 'dbuser');
+            $remotedbpass = get_config('block_configurable_reports', 'dbpass');
+            if (!(!empty($remotedbhost) && !empty($remotedbname) && !empty($remotedbuser) && !empty($remotedbpass))) {
+                throw new \moodle_exception('remotedbnotconfigured', 'block_configurable_reports');
+            }
+
             $dbclass = get_class($DB);
             $remotedb = new $dbclass();
             $remotedb->connect($remotedbhost, $remotedbuser, $remotedbpass, $remotedbname, $CFG->prefix);
