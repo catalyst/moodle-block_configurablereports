@@ -63,30 +63,34 @@ class plugin_fsearchuserfield extends plugin_base {
      */
     public function execute($finalelements, $data) {
         if ($this->report->type === 'sql') {
-            return $this->execute_sql($finalelements, $data);
+            // The SQL filter needs bound parameters, see execute_for_sql_report().
+            throw new coding_exception('SQL reports must use execute_for_sql_report()');
         }
 
         return $this->execute_users($finalelements, $data);
     }
 
     /**
-     * execute_sql
+     * Applies the filter to an SQL report query, binding the submitted value as a parameter.
      *
-     * @param string $finalelements
-     * @param object $data
-     * @return array|string|string[]
+     * @param string $sql
+     * @param object|null $data
+     * @return array [SQL, DML parameters]
      */
-    private function execute_sql($finalelements, object $data) {
+    public function execute_for_sql_report(string $sql, ?object $data = null): array {
+        global $remotedb;
+
         $filterfuserfield = optional_param('filter_fuserfield_' . $data->field, 0, PARAM_RAW);
-        $filter = clean_param(base64_decode($filterfuserfield), PARAM_TEXT);
 
-        if ($filterfuserfield && preg_match("/%%FILTER_USERS:([^%]+)%%/i", $finalelements, $output)) {
-            $replace = ' AND ' . $output[1] . ' LIKE ' . "'%$filter%'";
+        if ($filterfuserfield && preg_match("/%%FILTER_USERS:([^%]+)%%/i", $sql, $output)) {
+            $filter = clean_param(base64_decode($filterfuserfield), PARAM_TEXT);
+            $replace = ' AND ' . $remotedb->sql_like($output[1], ':fsearchuserfield', false);
+            $sql = str_replace('%%FILTER_USERS:' . $output[1] . '%%', $replace, $sql);
 
-            return str_replace('%%FILTER_USERS:' . $output[1] . '%%', $replace, $finalelements);
+            return [$sql, ['fsearchuserfield' => '%' . $remotedb->sql_like_escape($filter) . '%']];
         }
 
-        return $finalelements;
+        return [$sql, []];
     }
 
     /**

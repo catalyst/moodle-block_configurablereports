@@ -109,6 +109,19 @@ abstract class plugin_base {
     }
 
     /**
+     * Applies the filter to an SQL report query.
+     *
+     * Request-derived values must be returned as named DML parameters rather than concatenated into the SQL.
+     *
+     * @param string $sql
+     * @param object|null $data
+     * @return array [SQL, DML parameters]
+     */
+    public function execute_for_sql_report(string $sql, ?object $data = null): array {
+        return [$this->execute($sql, $data), []];
+    }
+
+    /**
      * colformat
      *
      * @param object|null $data

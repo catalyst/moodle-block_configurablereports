@@ -103,6 +103,57 @@ final class fsearchuserfield_test extends \advanced_testcase {
     }
 
     /**
+     * Filter parameters must be bound alongside dynamic SQL parameters.
+     */
+    public function test_filter_parameters_are_merged_with_dynamic_parameters(): void {
+        global $CFG, $DB;
+
+        require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
+        require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
+        require_once($CFG->dirroot . '/blocks/configurable_reports/reports/sql/report.class.php');
+
+        $this->resetAfterTest();
+        $originalget = $_GET;
+
+        try {
+            $target = $this->getDataGenerator()->create_user(['firstname' => 'Alice']);
+            $components = [
+                'customsql' => [
+                    'config' => (object) [
+                        'querysql' => 'SELECT u.id FROM {user} u WHERE u.id = :blockdynamic0 %%FILTER_USERS:u.firstname%%',
+                    ],
+                ],
+                'filters' => [
+                    'elements' => [
+                        [
+                            'pluginname' => 'fsearchuserfield',
+                            'formdata' => (object) ['field' => 'firstname'],
+                        ],
+                    ],
+                ],
+            ];
+            $config = (object) [
+                'courseid' => SITEID,
+                'ownerid' => get_admin()->id,
+                'visible' => 1,
+                'name' => 'User-field filter with dynamic parameters',
+                'type' => 'sql',
+                'components' => cr_serialize($components),
+                'remote' => 0,
+            ];
+            $config->id = $DB->insert_record('block_configurable_reports', $config);
+            $report = new \block_configurable_reports\local\dynamic_report($config);
+            $report->set_query_parameters(['blockdynamic0' => $target->id]);
+
+            $_GET = ['filter_fuserfield_firstname' => base64_encode('lic')];
+            $this->assertTrue($report->create_report());
+            $this->assertSame([(int) $target->id], array_map('intval', array_column($report->finalreport->table->data, 0)));
+        } finally {
+            $_GET = $originalget;
+        }
+    }
+
+    /**
      * Filter controls and an attempted SQL predicate breakout.
      *
      * @return array

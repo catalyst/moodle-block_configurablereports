@@ -39,6 +39,11 @@ class report_sql extends report_base {
     private bool $forexport = false;
 
     /**
+     * @var array DML parameters bound by the report filters.
+     */
+    protected array $filterparams = [];
+
+    /**
      * set_forexport
      *
      * @param bool $isforexport
@@ -140,11 +145,13 @@ class report_sql extends report_base {
 
         $starttime = microtime(true);
 
+        $params = $this->filterparams ?: null;
+
         if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && !empty($CFG->block_configurable_reports_enable_sql_execution)) {
             // Run special (dangerous) queries directly.
-            $results = $remotedb->execute($sql);
+            $results = $remotedb->execute($sql, $params);
         } else {
-            $results = $remotedb->get_recordset_sql($sql, null, 0, $reportlimit);
+            $results = $remotedb->get_recordset_sql($sql, $params, 0, $reportlimit);
         }
 
         // Update the execution time in the DB.
@@ -182,13 +189,15 @@ class report_sql extends report_base {
         if (isset($config->querysql)) {
             // Filters.
             $sql = $config->querysql;
+            $this->filterparams = [];
             if (!empty($filters)) {
                 foreach ($filters as $f) {
                     require_once($CFG->dirroot . '/blocks/configurable_reports/components/filters/' . $f['pluginname'] .
                         '/plugin.class.php');
                     $classname = 'plugin_' . $f['pluginname'];
                     $class = new $classname($this->config);
-                    $sql = $class->execute($sql, $f['formdata']);
+                    [$sql, $filterparams] = $class->execute_for_sql_report($sql, $f['formdata']);
+                    $this->filterparams = array_merge($this->filterparams, $filterparams);
                 }
             }
 
