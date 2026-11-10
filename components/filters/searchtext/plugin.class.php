@@ -62,29 +62,47 @@ class plugin_searchtext extends plugin_base {
      * @return string|array
      */
     public function execute($finalelements, $data) {
+        if ($this->report->type === 'sql') {
+            // The SQL filter needs bound parameters, see execute_for_sql_report().
+            throw new coding_exception('SQL reports must use execute_for_sql_report()');
+        }
+
+        return [$this->get_submitted_value($data)];
+    }
+
+    /**
+     * Applies the filter to an SQL report query, binding the submitted value as a parameter.
+     *
+     * @param string $sql
+     * @param object|null $data
+     * @return array [SQL, DML parameters]
+     */
+    public function execute_for_sql_report(string $sql, ?object $data = null): array {
+        $filtersearchtext = $this->get_submitted_value($data);
+
+        if ($filtersearchtext === '') {
+            return [$sql, []];
+        }
 
         // For backwards compatibility and filters without idnumber, includes old method of matching without idnumber.
+        $filtermatch = !empty($data->idnumber) ? "FILTER_SEARCHTEXT_{$data->idnumber}" : 'FILTER_SEARCHTEXT';
+
+        return $this->apply_text_filter($sql, $filtermatch, $filtersearchtext);
+    }
+
+    /**
+     * Reads the text the viewer submitted.
+     *
+     * @param object|null $data
+     * @return string
+     */
+    private function get_submitted_value(?object $data): string {
+        // For backwards compatibility and filters without idnumber, includes old method of matching without idnumber.
         if (!empty($data->idnumber)) {
-            $filtersearchtext = optional_param('filter_searchtext_' . $data->idnumber, '', PARAM_RAW);
-        } else {
-            $filtersearchtext = optional_param('filter_searchtext', '', PARAM_RAW);
+            return (string) optional_param('filter_searchtext_' . $data->idnumber, '', PARAM_RAW);
         }
 
-        if ($this->report->type !== 'sql') {
-            return [$filtersearchtext];
-        }
-
-        if ($filtersearchtext) {
-            if (!empty($data->idnumber)) {
-                $filtermatch = "FILTER_SEARCHTEXT_{$data->idnumber}";
-            } else {
-                $filtermatch = "FILTER_SEARCHTEXT";
-            }
-
-            $finalelements = $this->sql_replace($filtersearchtext, $filtermatch, $finalelements);
-        }
-
-        return $finalelements;
+        return (string) optional_param('filter_searchtext', '', PARAM_RAW);
     }
 
     /**
@@ -111,56 +129,5 @@ class plugin_searchtext extends plugin_base {
         $mform->addElement('text', $filtername, $filterlabel);
         $mform->setType($filtername, PARAM_RAW);
         $mform->setDefault($filtername, $filtersearchtext);
-    }
-
-    /**
-     * sql_replace
-     *
-     * @param string $filtersearchtext
-     * @param string $filterstrmatch
-     * @param string $finalelements
-     * @return array|mixed|string|string[]
-     */
-    private function sql_replace($filtersearchtext, $filterstrmatch, $finalelements) {
-
-        // TODO Check if this is a duplicate of the same function in plugin_fuserfield.
-        $operators = ['=', '<', '>', '<=', '>=', '~', 'in'];
-
-        if (preg_match("/%%$filterstrmatch:([^%]+)%%/i", $finalelements, $output)) {
-            [$field, $operator] = preg_split('/:/', $output[1]);
-
-            if (!in_array($operator, $operators, true)) {
-                throw new moodle_exception('nosuchoperator');
-            }
-
-            if ($operator === '~') {
-                $searchitem = trim(str_replace("'", "''", $filtersearchtext));
-                $replace = " AND " . $field . " LIKE '%" . $searchitem . "%'";
-            } else if ($operator === 'in') {
-                $processeditems = [];
-                // Accept comma-separated values, allowing for '\,' as a literal comma.
-                foreach (preg_split("/(?<!\\\\),/", $filtersearchtext) as $searchitem) {
-                    // Strip leading/trailing whitespace and quotes (we'll add our own quotes later).
-                    $searchitem = trim($searchitem);
-                    $searchitem = trim($searchitem, '"\'');
-
-                    // We can also safely remove escaped commas now.
-                    $searchitem = str_replace('\\,', ',', $searchitem);
-
-                    // Escape and quote strings...
-                    if (!is_numeric($searchitem)) {
-                        $searchitem = "'" . addslashes($searchitem) . "'";
-                    }
-                    $processeditems[] = "$field like $searchitem";
-                }
-                // Despite the name, by not actually using in() we can support wildcards, and maybe be more portable as well.
-                $replace = " AND (" . implode(" OR ", $processeditems) . ")";
-            } else {
-                $replace = ' AND ' . $field . ' ' . $operator . ' ' . $filtersearchtext;
-            }
-            $finalelements = str_replace("%%$filterstrmatch:" . $output[1] . '%%', $replace, $finalelements);
-        }
-
-        return $finalelements;
     }
 }
