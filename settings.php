@@ -68,6 +68,15 @@ if ($ADMIN->fulltree) {
     );
 
     $settings->add(
+        new admin_setting_configcheckbox(
+            'block_configurable_reports/alwaysuseremote',
+            get_string('alwaysuseremote', 'block_configurable_reports'),
+            get_string('alwaysuseremoteinfo', 'block_configurable_reports'),
+            0
+        )
+    );
+
+    $settings->add(
         new admin_setting_configtime(
             'block_configurable_reports/cron_hour',
             'cron_minute',
