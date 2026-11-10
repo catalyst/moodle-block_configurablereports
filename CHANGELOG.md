@@ -3,6 +3,47 @@
 All notable changes to the Configurable Reports block, newest first. Entries up to
 4.5.0 were kept in `README.txt`, which this file replaces.
 
+## 5.3.3 (2027050405) for Moodle 4.0 and later
+
+_Release date: 10.11.2026_
+
+Requires PHP 8.0 or later.
+
+Changes to check when upgrading:
+
+- Custom SQL reports only accept queries that read data, so the query has to
+  start with `SELECT` or `WITH` (comments and placeholders before it are fine).
+  `INSERT` and `CREATE` are still allowed when SQL execution is enabled on the
+  server and SQL security is off. The `EXEC`, `EXECUTE` and `UESCAPE` keywords
+  are no longer accepted.
+- The courses, categories, subcategories, course modules, user, users, enrolled
+  students, role, semester and year filters now narrow the elements the report
+  conditions select, instead of replacing them with the chosen value.
+
+### Fixes
+
+- GitHub issue #302: links built in SQL reports that contain a question mark
+  work again.
+- CONTRIB-4262: the user field column shows the user creation time as a date.
+- CONTRIB-9879, CONTRIB-9881 and CONTRIB-9882: importing reports from the GitHub
+  repository no longer lists the README or the repository root as reports,
+  shows no "undefined" reports when GitHub answers with an error such as the
+  rate limit, and fails cleanly instead of raising PHP warnings.
+- The user field filter only uses columns of the user table.
+- Semicolons and line breaks in cells no longer break SYLK exports.
+- Timeline reports require an interval of at least one day, checked on the
+  server too, and their rows stop at the report limit setting. Pie and line
+  chart sizes are capped.
+- Imported reports keep only the column alignment and size values the column
+  form allows, and their element ids are validated.
+
+### Other changes
+
+- The cohort and competency filters, which sat outside `components/filters/` and
+  were never loaded, were removed.
+- The GitHub repository was renamed to `moodle-block_configurable_reports`.
+- More PHPUnit tests for the SQL reports, filters and user field column.
+
 ## 5.3.2 (2027050404) for Moodle 4.0 and later
 
 _Release date: 01.11.2026_

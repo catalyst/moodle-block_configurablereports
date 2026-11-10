@@ -467,7 +467,7 @@ function cr_print_table(object $table, bool $return = false) {
                 $extraclass = '';
             }
 
-            $output .= '<th style="vertical-align:top;' . $align[$key] . $size[$key] . ';white-space:normal;" class="header c' .
+            $output .= '<th style="vertical-align:top;' . s($align[$key] . $size[$key]) . ';white-space:normal;" class="header c' .
                 $key . $extraclass . '" scope="col">' . $heading . '</th>';
         }
         $output .= '</tr></thead>' . "\n";
@@ -510,11 +510,11 @@ function cr_print_table(object $table, bool $return = false) {
                         $extraclass = '';
                     }
                     if ($keyouter == $isuserid) {
-                        $output .= '<td style="' . $align[$keyouter] . $size[$keyouter] . $wrap[$keyouter] . '" class="cell c' .
+                        $output .= '<td style="' . s($align[$keyouter] . $size[$keyouter] . $wrap[$keyouter]) . '" class="cell c' .
                             $keyouter .
                             $extraclass . '"><input name="userids[]" type="checkbox" value="' . s($item) . '"></td>';
                     } else {
-                        $output .= '<td style="' . $align[$keyouter] . $size[$keyouter] . $wrap[$keyouter] . '" class="cell c' .
+                        $output .= '<td style="' . s($align[$keyouter] . $size[$keyouter] . $wrap[$keyouter]) . '" class="cell c' .
                             $keyouter .
                             $extraclass . '">' . $item . '</td>';
                     }
@@ -767,6 +767,10 @@ function cr_clean_imported_components(array $components): array {
                 if (!isset($element['formdata']) || !is_object($element['formdata'])) {
                     $element['formdata'] = new stdClass();
                 }
+                // Element ids are random alphanumeric strings, which is what editplugin.php accepts.
+                if (!isset($element['id']) || !is_string($element['id']) || !preg_match('/^[a-zA-Z0-9]+$/', $element['id'])) {
+                    $element['id'] = random_string(15);
+                }
                 $elements[] = $element;
             }
             $compdata['elements'] = $elements;
@@ -842,6 +846,26 @@ function block_configurable_reports_require_course_login(): context {
     require_login($courseid);
 
     return context_course::instance($courseid);
+}
+
+/**
+ * Keep the reports from a listing of a reports repository folder, as GitHub returns it.
+ *
+ * GitHub answers with an object instead of a list when the request fails, for example when the rate limit is
+ * reached, and a folder can hold files other than reports (README...), which cannot be imported.
+ *
+ * @param mixed $listing The decoded answer of the GitHub contents API.
+ * @return array The XML files of the folder.
+ */
+function block_configurable_reports_repository_reports($listing): array {
+    if (!is_array($listing)) {
+        return [];
+    }
+
+    return array_values(array_filter($listing, function($item) {
+        return is_object($item) && ($item->type ?? '') === 'file' &&
+            strtolower(pathinfo($item->name ?? '', PATHINFO_EXTENSION)) === 'xml';
+    }));
 }
 
 /**

@@ -63,8 +63,37 @@ class report_sql extends report_base {
     public static function get_query_security_error(string $sql): ?string {
         global $CFG;
 
-        if (get_config('block_configurable_reports', 'sqlsecurity')) {
-            if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+        $highsecurity = (bool) get_config('block_configurable_reports', 'sqlsecurity');
+
+        // Escape sequences in strings can spell keywords and semicolons that only show once the database runs the
+        // string as SQL: E'\x55\x50\x44\x41\x54\x45' is UPDATE on PostgreSQL. So the query is checked decoded too.
+        foreach ([$sql, self::decode_escape_strings($sql), self::decode_unicode_strings($sql)] as $text) {
+            if ($error = self::get_keywords_error($text, $highsecurity)) {
+                return $error;
+            }
+        }
+
+        $sqlexecution =!$highsecurity && !empty($CFG->block_configurable_reports_enable_sql_execution);
+        if (!self::is_allowed_statement($sql, $sqlexecution)) {
+            return 'notselectquery';
+        }
+
+        return null;
+    }
+
+    /**
+     * Check the query against the keywords allowed by the SQL security setting.
+     *
+     * @param string $sql
+     * @param bool $highsecurity
+     * @return string|null The error string identifier, or null if the query is allowed.
+     */
+    private static function get_keywords_error(string $sql, bool $highsecurity): ?string {
+        global $CFG;
+
+        if ($highsecurity) {
+            if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK|' .
+                    'EXEC|EXECUTE|UESCAPE)\b/i', $sql)) {
                 return 'notallowedwords';
             }
             if (strpos($sql, ';') !== false) {
@@ -74,7 +103,8 @@ class report_sql extends report_base {
             return null;
         }
 
-        if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+        if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK|EXEC|EXECUTE|UESCAPE)\b/i',
+                $sql)) {
             return 'notallowedwords';
         }
         // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
@@ -83,6 +113,83 @@ class report_sql extends report_base {
         }
 
         return null;
+    }
+
+    /**
+     * Check that the query is a statement that reads data: one starting with SELECT or WITH.
+     *
+     * Statements like DO, CALL or PREPARE run SQL kept in a string or a procedure, out of reach of the keyword check.
+     *
+     * @param string $sql
+     * @param bool $sqlexecution Whether INSERT and CREATE statements are allowed too.
+     * @return bool
+     */
+    public static function is_allowed_statement(string $sql, bool $sqlexecution = false): bool {
+        // Skip what can come before the statement: spaces, opening parentheses, placeholders and comments. A block
+        // comment is not skipped if it holds another one (PostgreSQL nests them, so it would end somewhere else), or
+        // if it is one that MySQL and MariaDB run (/*! ... */ and /*M! ... */).
+        $sql = preg_replace('~^(?:\s+|\(|%{2}[^%]+%{2}|--[^\n]*|/\*(?!M?!)(?:(?!/\*).)*?\*/)*~s', '', $sql);
+
+        $statements = $sqlexecution ? 'SELECT|WITH|INSERT|CREATE' : 'SELECT|WITH';
+
+        return (bool) preg_match('/^(' . $statements . ')\b/i', (string) $sql);
+    }
+
+    /**
+     * Decode the backslash escape sequences of escape strings, like PostgreSQL does in E'\x55PDATE'.
+     *
+     * The whole query is decoded, and decoded again while that changes it, as a string run as SQL may hold
+     * escape strings of its own.
+     *
+     * @param string $sql
+     * @return string
+     */
+    protected static function decode_escape_strings(string $sql): string {
+        $controls = ['b' => "\x08", 'f' => "\f", 'n' => "\n", 'r' => "\r", 't' => "\t"];
+
+        do {
+            $previous = $sql;
+            $sql = preg_replace_callback(
+                '/\\\\(?:x([0-9a-fA-F]{1,2})|([0-7]{1,3})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8})|(.))/s',
+                function(array $match) use ($controls): string {
+                    if (isset($match[1])) {
+                        return chr(hexdec($match[1]));
+                    }
+                    if (isset($match[2])) {
+                        return chr(octdec($match[2]) & 0xFF);
+                    }
+                    if (isset($match[3]) || isset($match[4])) {
+                        return \core_text::code2utf8(hexdec($match[3] ?? $match[4]));
+                    }
+                    // Any other character stands for itself: E'U\PD\ATE' is UPDATE too.
+                    return $controls[$match[5]] ?? $match[5];
+                },
+                $sql, -1, $count, PREG_UNMATCHED_AS_NULL
+            ) ?? $previous;
+        } while ($sql !== $previous);
+
+        return $sql;
+    }
+
+    /**
+     * Decode the escape sequences of PostgreSQL Unicode strings, as in U&'\0055PDATE'.
+     *
+     * They are decoded apart from escape strings because they read \0055 differently. A custom escape character,
+     * set with UESCAPE, is not decoded: that keyword is not allowed instead.
+     *
+     * @param string $sql
+     * @return string
+     */
+    protected static function decode_unicode_strings(string $sql): string {
+        return preg_replace_callback('/\\\\(?:([0-9a-fA-F]{4})|\+([0-9a-fA-F]{6})|(\\\\))/',
+            function(array $match): string {
+                if (isset($match[3])) {
+                    return '\\';
+                }
+                return \core_text::code2utf8(hexdec($match[1] ?? $match[2]));
+            },
+            $sql, -1, $count, PREG_UNMATCHED_AS_NULL
+        ) ?? $sql;
     }
 
     /**
@@ -308,11 +415,13 @@ class report_sql extends report_base {
                     $arrayrow = array_values((array) $row);
                     foreach ($arrayrow as $ii => $cell) {
                         // A NULL column reaches the export path unformatted, and str_replace() will not take null.
-                        $cell ??= '';
+                        $cell = str_replace('[[QUESTIONMARK]]', '?', $cell ?? '');
+                        // The question marks go back before cleaning: the cleaner encodes the placeholder inside
+                        // link URLs (issue #302), and it must see the content exactly as it will be shown.
                         if (!$this->is_forexport()) {
                             $cell = format_text($cell, FORMAT_HTML, ['para' => false, 'context' => $cellcontext ?: context_system::instance()]);
                         }
-                        $arrayrow[$ii] = str_replace('[[QUESTIONMARK]]', '?', $cell);
+                        $arrayrow[$ii] = $cell;
                     }
                     $totalrecords++;
                     $finaltable[] = $arrayrow;

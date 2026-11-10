@@ -35,6 +35,8 @@ require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/plugin.class.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/reports/sql/report.class.php');
+require_once($CFG->dirroot . '/blocks/configurable_reports/reports/timeline/report.class.php');
+require_once($CFG->dirroot . '/blocks/configurable_reports/export/slk/export.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/components/filters/yearhebrew/plugin.class.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/components/columns/userfield/plugin.class.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/components/conditions/cuserfield/plugin.class.php');
@@ -213,6 +215,25 @@ final class security_test extends advanced_testcase {
     }
 
     /**
+     * Question marks go back into the cells before they are cleaned, so they cannot be used to get script past it.
+     */
+    public function test_sql_report_question_marks_do_not_bypass_cleaning(): void {
+        $this->setAdminUser();
+        $this->getDataGenerator()->create_user(['username' => 'crtest1',
+            'description' => '<a href="javascript:alert(1)?x=[[QUESTIONMARK]]" onclick="alert(1)">?</a><img src="x?" onerror="alert(1)">']);
+
+        $report = new \report_sql($this->create_sql_report(
+            "SELECT u.description, '<script>alert(1)</script>?' AS other FROM {user} u WHERE u.username = 'crtest1'"));
+        $report->create_report();
+
+        $cells = implode('', $report->finalreport->table->data[0]);
+        $this->assertStringNotContainsString('javascript:', $cells);
+        $this->assertStringNotContainsString('onclick', $cells);
+        $this->assertStringNotContainsString('onerror', $cells);
+        $this->assertStringNotContainsString('<script>', $cells);
+    }
+
+    /**
      * User field columns escape plain fields.
      */
     public function test_userfield_column_is_escaped(): void {
@@ -347,5 +368,67 @@ final class security_test extends advanced_testcase {
         ob_start();
         $task->execute();
         $this->assertSame('', ob_get_clean());
+    }
+
+    /**
+     * Imported column formats keep only the values the column form allows, as they end up in a style attribute.
+     */
+    public function test_column_format_is_validated(): void {
+        $column = new \plugin_userfield((object) ['id' => 0, 'type' => 'users', 'components' => cr_serialize([]),
+            'courseid' => SITEID]);
+
+        $this->assertSame(['right', '50%', 1], $column->colformat((object) ['align' => 'right', 'size' => '50%', 'wrap' => 1]));
+        $this->assertSame(['', '', ''], $column->colformat((object) [
+            'align' => 'x;" onmouseover="alert(1)" data-x="',
+            'size' => '10px;" onmouseover="alert(1)',
+        ]));
+    }
+
+    /**
+     * Imported element ids that are not alphanumeric are replaced, as they end up in the links of the report editor.
+     */
+    public function test_import_replaces_invalid_element_ids(): void {
+        $components = cr_clean_imported_components(['columns' => ['elements' => [
+            ['id' => 'abc123', 'pluginname' => 'userfield', 'formdata' => new \stdClass()],
+            ['id' => '"><script>alert(1)</script>', 'pluginname' => 'userfield', 'formdata' => new \stdClass()],
+            ['pluginname' => 'userfield', 'formdata' => new \stdClass()],
+        ]]]);
+
+        $ids = array_column($components['columns']['elements'], 'id');
+        $this->assertSame('abc123', $ids[0]);
+        $this->assertCount(3, $ids);
+        $this->assertMatchesRegularExpression('/^[a-zA-Z0-9]{15}$/', $ids[1]);
+        $this->assertMatchesRegularExpression('/^[a-zA-Z0-9]{15}$/', $ids[2]);
+    }
+
+    /**
+     * A timeline with an interval below one day still ends, and a long range is cut at the report limit.
+     */
+    public function test_timeline_rows_are_bounded(): void {
+        set_config('reportlimit', 100, 'block_configurable_reports');
+
+        $config = (object) ['timemode' => 'fixeddate', 'starttime' => 0, 'endtime' => time(), 'interval' => 0,
+            'ordering' => 'asc'];
+        $report = new \report_timeline((object) ['id' => 0, 'courseid' => SITEID, 'type' => 'timeline', 'remote' => 0,
+            'components' => cr_serialize(['timeline' => ['config' => $config]])]);
+
+        $elements = $report->get_all_elements();
+
+        $this->assertCount(100, $elements);
+        $this->assertSame(DAYSECS, $elements[1] - $elements[0]);
+    }
+
+    /**
+     * Cell values cannot start new SYLK records or fields.
+     */
+    public function test_slk_cells_are_escaped(): void {
+        ob_start();
+        dump_slk_row(["x\nC;Y1;X1;K0;E1+1", 'a;b']);
+        $output = ob_get_clean();
+
+        $lines = explode("\n", trim($output));
+        $this->assertCount(2, $lines);
+        $this->assertStringEndsWith('K"x C;;Y1;;X1;;K0;;E1+1"', $lines[0]);
+        $this->assertStringEndsWith('K"a;;b"', $lines[1]);
     }
 }
