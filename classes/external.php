@@ -85,19 +85,32 @@ class external extends external_api {
             ['reportid' => $reportid, 'courseid' => $courseid, 'parameters' => $parameters]
         );
 
-        if ($courseid === SITEID) {
-            $context = context_system::instance();
-        } else {
-            $context = context_course::instance($courseid);
-        }
-
-        self::validate_context($context);
-
         $json = [];
         $warnings = '';
-        if (!$report = $DB->get_record('block_configurable_reports', ['id' => $reportid])) {
+        if (!$report = $DB->get_record('block_configurable_reports', ['id' => $params['reportid']])) {
+            self::validate_context(context_system::instance());
             $warnings = get_string('reportdoesnotexists', 'block_configurable_reports');
         } else {
+            // Permissions are always checked in the report's own course, only global reports can run in another course.
+            $courseid = (int) $params['courseid'];
+            if ($courseid && $report->global) {
+                $report->courseid = $courseid;
+            } else {
+                $courseid = (int) $report->courseid;
+            }
+
+            if ($courseid == SITEID) {
+                $context = context_system::instance();
+            } else {
+                $context = context_course::instance($courseid);
+            }
+            self::validate_context($context);
+
+            // The type is part of the path required below, so it must be one of the report plugins.
+            if (!in_array($report->type, get_list_of_plugins('blocks/configurable_reports/reports'), true)) {
+                throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
+            }
+
             require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
             require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
             require_once($CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php');
@@ -105,10 +118,7 @@ class external extends external_api {
             $reportclassname = 'report_' . $report->type;
             $reportclass = new $reportclassname($report);
             if (!$reportclass->check_permissions($USER->id, $context)) {
-                return [
-                    'data' => json_encode($json, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-                    'warnings' => get_string('badpermissions', 'block_configurable_reports'),
-                ];
+                throw new moodle_exception('badpermissions', 'block_configurable_reports');
             }
 
             if ($report->type === 'sql' && self::has_dynamic_sql_placeholders($report)) {
