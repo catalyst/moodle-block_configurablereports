@@ -79,6 +79,24 @@ class report_sql extends report_base {
     }
 
     /**
+     * Cast the %%FILTER_VAR%% value, so numbers are bound as numbers (needed in arithmetic on PostgreSQL).
+     *
+     * @param string $value
+     * @return int|float|string
+     */
+    protected static function cast_filter_var(string $value) {
+        $value = trim($value);
+        if (preg_match('/^-?\d{1,18}$/', $value)) {
+            return (int) $value;
+        }
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        return $value;
+    }
+
+    /**
      * prepare_sql
      *
      * @param string $sql
@@ -101,13 +119,36 @@ class report_sql extends report_base {
         // Enable debug mode from SQL query.
         $this->config->debug = strpos($sql, '%%DEBUG%%') !== false;
 
-        // Pass special custom undefined variable as filter.
-        // Security warning !!! can be used for sql injection.
-        // Use %%FILTER_VAR%% in your sql code with caution.
-        $filtervar = optional_param('filter_var', '', PARAM_RAW);
-        if (!empty($filtervar)) {
-            $sql = str_replace('%%FILTER_VAR%%', $filtervar, $sql);
-        }
+        // %%FILTER_VAR%% is replaced with the filter_var URL parameter, always bound as a value, so it can be used
+        // anywhere a value is valid: "WHERE cm.id = %%FILTER_VAR%%", "<= %%FILTER_VAR%% * 86400"...
+        // Forget the values bound by a previous call, as the same report object prepares several queries.
+        $this->filterparams = array_filter(
+            $this->filterparams,
+            fn($name) => !preg_match('/^filtervar\d+$/', (string) $name),
+            ARRAY_FILTER_USE_KEY
+        );
+        $filtervar = trim(optional_param('filter_var', '', PARAM_RAW));
+        $i = 0;
+        $filterparams = &$this->filterparams;
+        $sql = preg_replace_callback(
+            '/%%FILTER_VAR%%/',
+            function (array $match) use (&$i, &$filterparams, $filtervar, $sql): string {
+                if ($filtervar === '') {
+                    // Without a value, a placeholder used as a value is NULL, so the report shows no rows instead of
+                    // failing. Anywhere else it is removed, as in reports that add a whole condition with it.
+                    $before = substr($sql, 0, $match[0][1]);
+                    return preg_match('/(?:[=<>!(,+\-*\/|]|\b(?:LIKE|IN|BETWEEN|THEN|ELSE|WHEN))\s*$/i', $before) ? 'NULL' : '';
+                }
+                $name = 'filtervar' . ++$i;
+                $filterparams[$name] = self::cast_filter_var($filtervar);
+                return ':' . $name;
+            },
+            $sql,
+            -1,
+            $count,
+            PREG_OFFSET_CAPTURE
+        );
+        unset($filterparams);
 
         // See http://en.wikipedia.org/wiki/Year_2038_problem.
         $sql = str_replace(
@@ -212,7 +253,21 @@ class report_sql extends report_base {
                 $formhasdata = true;
             }
 
-            if (($formhasdata || !$filterform) && $rs = $this->execute_query($sql)) {
+            $rs = null;
+            if ($formhasdata || !$filterform) {
+                try {
+                    $rs = $this->execute_query($sql);
+                } catch (dml_read_exception $e) {
+                    // Databases like PostgreSQL refuse comparing a number with text, so a filter_var value of the
+                    // wrong type is an error there. Say so instead of showing a database error.
+                    if (trim(optional_param('filter_var', '', PARAM_RAW)) !== '' && strpos($config->querysql, '%%FILTER_VAR%%') !== false) {
+                        throw new moodle_exception('invalidfiltervar', 'block_configurable_reports', '', null, $e->getMessage());
+                    }
+                    throw $e;
+                }
+            }
+
+            if ($rs) {
                 foreach ($rs as $row) {
                     if (empty($finaltable)) {
                         foreach ($row as $colname => $value) {

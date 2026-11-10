@@ -595,3 +595,4 @@ $string['missingcustomsql'] = 'The report does not contain custom SQL.';
 $string['missingreportclass'] = 'The Configurable Reports report class was not found.';
 $string['missingreportclassfile'] = 'The Configurable Reports report class file was not found.';
 $string['unresolvedplaceholder'] = 'An unresolved dynamic placeholder remains in the report SQL.';
+$string['invalidfiltervar'] = 'The value of the filter_var parameter is not valid for this report.';
