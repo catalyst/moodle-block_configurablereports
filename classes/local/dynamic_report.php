@@ -52,7 +52,7 @@ final class dynamic_report extends \report_sql {
         }
 
         $starttime = microtime(true);
-        $results = $remotedb->get_recordset_sql($sql, $this->queryparams, 0, $reportlimit);
+        $results = $remotedb->get_recordset_sql($sql, array_merge($this->queryparams, $this->filterparams), 0, $reportlimit);
 
         $updaterecord = $DB->get_record('block_configurable_reports', ['id' => $this->config->id]);
         $updaterecord->lastexecutiontime = round((microtime(true) - $starttime) * 1000);
