@@ -220,7 +220,7 @@ function cr_unserialize(string $data): array {
     $data = preg_replace('/%60/', '+++', $data);
 
     // TODO remove unserialize.
-    $data = unserialize($data);
+    $data = unserialize($data, ['allowed_classes' => ['stdClass']]);
 
     return (array) urldecode_recursive($data);
 }
@@ -583,8 +583,15 @@ function cr_import_xml(string $xml, object $course) {
     $data = xmlize($xml, 1, 'UTF-8');
 
     if (isset($data['report']['@']['version'])) {
+        // Only these fields can be imported, the rest are set by the current context.
+        $allowedfields = ['visible', 'name', 'summary', 'summaryformat', 'type', 'pagination', 'components', 'export',
+            'jsordering', 'global', 'cron', 'remote', 'displaytotalrecords', 'displayprintbutton'];
+
         $newreport = new stdclass();
         foreach ($data['report']['#'] as $key => $val) {
+            if (!in_array($key, $allowedfields, true)) {
+                continue;
+            }
             if ($key === 'components') {
                 $val[0]['#'] = base64_decode(trim($val[0]['#']));
                 // Fix url_encode " and ' when importing SQL queries.
@@ -601,6 +608,29 @@ function cr_import_xml(string $xml, object $course) {
             }
             $newreport->{$key} = trim($val[0]['#']);
         }
+        // The report type must be one the user is allowed to create in this course (SQL reports need managesqlreports).
+        $allowedtypes = array_keys(cr_get_report_plugins((int) $course->id));
+        if (empty($newreport->type) || !in_array($newreport->type, $allowedtypes, true)) {
+            throw new moodle_exception('nosqlpermissions', 'block_configurable_reports');
+        }
+
+        // Only keep known export formats.
+        $exportformats = array_keys(cr_get_export_plugins());
+        $export = array_intersect(explode(',', $newreport->export ?? ''), $exportformats);
+        $newreport->export = $export ? implode(',', $export) . ',' : '';
+
+        foreach (
+            ['visible', 'summaryformat', 'pagination', 'jsordering', 'global', 'cron', 'remote', 'displaytotalrecords',
+                'displayprintbutton'] as $field
+        ) {
+            if (isset($newreport->{$field})) {
+                $newreport->{$field} = (int) $newreport->{$field};
+            }
+        }
+        $newreport->name = clean_param($newreport->name ?? '', PARAM_TEXT);
+        // Reports are visible by default, as when they are created with the form.
+        $newreport->visible = $newreport->visible ?? 1;
+
         $newreport->courseid = $course->id;
         $newreport->ownerid = $USER->id;
         $newreport->name .= " (" . userdate(time()) . ")";
