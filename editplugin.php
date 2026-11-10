@@ -42,7 +42,7 @@ if (!$pname) {
 }
 
 if (!$report = $DB->get_record('block_configurable_reports', ['id' => $id])) {
-    throw new moodle_exception('reportdoesnotexists');
+    throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
 }
 
 if (!$course = $DB->get_record("course", ['id' => $report->courseid])) {
@@ -60,11 +60,11 @@ if ($course->id == SITEID) {
 
 $hasmanagereportcap = has_capability('block/configurable_reports:managereports', $context);
 if (!$hasmanagereportcap && !has_capability('block/configurable_reports:manageownreports', $context)) {
-    throw new moodle_exception('badpermissions');
+    throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
 if (!$hasmanagereportcap && $report->ownerid != $USER->id) {
-    throw new moodle_exception('badpermissions');
+    throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
 require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');

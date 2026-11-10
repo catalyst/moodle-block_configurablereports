@@ -47,7 +47,7 @@ if (
     !has_capability('block/configurable_reports:managereports', $context) &&
     !has_capability('block/configurable_reports:manageownreports', $context)
 ) {
-    throw new moodle_exception('badpermissions');
+    throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
 $PAGE->set_url('/blocks/configurable_reports/managereport.php', ['courseid' => $course->id]);
@@ -69,7 +69,7 @@ if ($importurl) {
         $data = json_decode($data);
         $xml = base64_decode($data->content);
     } else {
-        throw new moodle_exception('errorimporting');
+        throw new moodle_exception('errorimporting', 'block_configurable_reports');
     }
 
     if (cr_import_xml($xml, $course)) {
@@ -78,7 +78,7 @@ if ($importurl) {
             get_string('reportcreated', 'block_configurable_reports')
         );
     } else {
-        throw new moodle_exception('errorimporting');
+        throw new moodle_exception('errorimporting', 'block_configurable_reports');
     }
 }
 
@@ -92,7 +92,7 @@ if ($data = $mform->get_data()) {
                 get_string('reportcreated', 'block_configurable_reports')
             );
         } else {
-            throw new moodle_exception('errorimporting');
+            throw new moodle_exception('errorimporting', 'block_configurable_reports');
         }
     }
 }

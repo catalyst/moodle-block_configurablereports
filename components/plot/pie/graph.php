@@ -36,7 +36,7 @@ $reportid = required_param('reportid', PARAM_INT);
 $courseid = optional_param('courseid', null, PARAM_INT);
 
 if (!$report = $DB->get_record('block_configurable_reports', ['id' => $reportid])) {
-    throw new moodle_exception('reportdoesnotexists');
+    throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
 }
 
 if (!$courseid || !$report->global) {
