@@ -67,6 +67,11 @@ class plugin_userfield extends plugin_base {
         // Data -> Plugin configuration data.
         // Row -> Complet user row c->id, c->fullname, etc...
 
+        // Imported reports do not go through the form, so check the column again.
+        if (in_array($data->column, cr_get_sensitive_user_columns(), true)) {
+            return '';
+        }
+
         if (strpos($data->column, 'profile_') === 0) {
             $sql = "SELECT d.*, f.shortname, f.datatype
                       FROM {user_info_data} d ,{user_info_field} f

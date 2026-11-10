@@ -37,17 +37,7 @@ class cuserfield_form extends moodleform {
     /**
      * @var string[]
      */
-    public array $allowedops = [
-        '=' => '=',
-        '>' => '>',
-        '<' => '<',
-        '>=' => '>=',
-        '<=' => '<=',
-        '<>' => '<>',
-        'LIKE' => 'LIKE',
-        'NOT LIKE' => 'NOT LIKE',
-        'LIKE % %' => 'LIKE % %',
-    ];
+    public array $allowedops = [];
 
     /**
      * Form definition
@@ -56,6 +46,7 @@ class cuserfield_form extends moodleform {
         global $DB;
 
         $mform =& $this->_form;
+        $this->allowedops = cr_get_condition_operators();
 
         $mform->addElement('header', 'crformheader', get_string('coursefield', 'block_configurable_reports'), '');
 
@@ -70,6 +61,10 @@ class cuserfield_form extends moodleform {
             foreach ($profile as $p) {
                 $usercolumns['profile_' . $p->shortname] = $p->name;
             }
+        }
+
+        foreach (cr_get_sensitive_user_columns() as $column) {
+            unset($usercolumns[$column]);
         }
 
         $mform->addElement('select', 'field', get_string('column', 'block_configurable_reports'), $usercolumns);
@@ -107,6 +102,10 @@ class cuserfield_form extends moodleform {
             foreach ($profile as $p) {
                 $usercolumns['profile_' . $p->shortname] = 'profile_' . $p->shortname;
             }
+        }
+
+        foreach (cr_get_sensitive_user_columns() as $column) {
+            unset($usercolumns[$column]);
         }
 
         if (!in_array($data['field'], $usercolumns)) {

@@ -66,6 +66,12 @@ class plugin_ccoursefield extends plugin_base {
         // TODO - Use DB -> sql_like().
         $ilike = " LIKE ";
 
+        // Imported reports do not go through the form, so validate the field and operator again.
+        if (!array_key_exists($data->field, $DB->get_columns('course')) ||
+                !in_array($data->operator, cr_get_condition_operators(), true)) {
+            return [];
+        }
+
         switch ($data->operator) {
             case 'LIKE % %':
                 $sql = "$data->field $ilike ?";

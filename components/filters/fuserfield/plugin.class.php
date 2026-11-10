@@ -161,6 +161,10 @@ class plugin_fuserfield extends plugin_base {
             }
         }
 
+        foreach (cr_get_sensitive_user_columns() as $column) {
+            unset($usercolumns[$column]);
+        }
+
         if (!isset($usercolumns[$formdata->field])) {
             throw new moodle_exception('nosuchcolumn');
         }

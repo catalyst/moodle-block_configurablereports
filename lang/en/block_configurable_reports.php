@@ -304,6 +304,11 @@ $string['usersincoursereport_summary'] = "Any user in the current report course"
 $string['printreport'] = 'Print report';
 
 $string['importreport'] = "Import report";
+$string['errorimporting'] = 'Error importing the report';
+$string['nosqlpermissions'] = 'You do not have permission to manage SQL reports';
+$string['badpermissions'] = 'You do not have permission to perform this action';
+$string['reportdoesnotexists'] = 'The report does not exist';
+$string['badcomponent'] = 'Invalid report component';
 $string['exportreport'] = "Export report";
 
 $string['download'] = "Download";
