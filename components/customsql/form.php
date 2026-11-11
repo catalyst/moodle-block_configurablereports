@@ -131,13 +131,9 @@ class customsql_form extends moodleform {
             $rs = null;
             try {
                 $rs = $this->_customdata['reportclass']->execute_query($sql, 2);
-            } catch (dml_exception $e) {
-                // The message of the database can contain data read by the query.
-                $errors['querysql'] = get_string(
-                    'queryfailed',
-                    'block_configurable_reports',
-                    s(\report_sql::redact_db_error((string) ($e->error ?? '')))
-                );
+            } catch (\block_configurable_reports\local\query_exception $e) {
+                // Already redacted: the message of the database can contain data read by the query.
+                $errors['querysql'] = get_string('queryfailed', 'block_configurable_reports', $e->a);
             } catch (moodle_exception $e) {
                 $errors['querysql'] = get_string($e->errorcode, $e->module);
             }

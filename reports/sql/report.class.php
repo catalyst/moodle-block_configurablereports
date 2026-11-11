@@ -335,7 +335,14 @@ class report_sql extends report_base {
 
         $starttime = microtime(true);
 
-        $results = $this->run_read_only($remotedb, $sql, $params, (int) $reportlimit);
+        try {
+            $results = $this->run_read_only($remotedb, $sql, $params, (int) $reportlimit);
+        } catch (\dml_exception $e) {
+            // The database exception carries the message, the SQL and the parameters, which can hold data the query
+            // read, and callers show it as debugging information. Nothing of it leaves here but a redacted message.
+            self::log_db_error($e);
+            throw new \block_configurable_reports\local\query_exception(self::redact_db_error((string) ($e->error ?? '')));
+        }
 
         // Update the execution time in the DB.
         $updaterecord = $DB->get_record('block_configurable_reports', ['id' => $this->config->id]);
@@ -398,21 +405,14 @@ class report_sql extends report_base {
             if ($formhasdata || !$filterform) {
                 try {
                     $rs = $this->execute_query($sql);
-                } catch (dml_read_exception $e) {
+                } catch (\block_configurable_reports\local\query_exception $e) {
                     // Databases like PostgreSQL refuse comparing a number with text, so a filter_var value of the
                     // wrong type is an error there. Say so instead of showing a database error.
                     if (trim(optional_param('filter_var', '', PARAM_RAW)) !== '' && strpos($config->querysql, '%%FILTER_VAR%%') !== false) {
-                        self::log_db_error($e);
                         throw new moodle_exception('invalidfiltervar', 'block_configurable_reports');
                     }
-                    // The message of the database can contain data read by the query, so only a redacted one is shown.
-                    self::log_db_error($e);
-                    throw new moodle_exception(
-                        'queryfailed',
-                        'block_configurable_reports',
-                        '',
-                        s(self::redact_db_error((string) ($e->error ?? '')))
-                    );
+
+                    throw $e;
                 }
             }
 

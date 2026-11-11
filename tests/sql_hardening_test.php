@@ -230,8 +230,11 @@ final class sql_hardening_test extends advanced_testcase {
         try {
             $report->execute_query($sql);
             $this->fail('The query was not read only');
-        } catch (\dml_read_exception $e) {
-            $this->assertStringContainsString('read-only transaction', $e->error);
+        } catch (\block_configurable_reports\local\query_exception $e) {
+            $this->assertStringContainsString('read-only transaction', $e->getMessage());
+            // Nothing of the database exception is kept: not the SQL, not the parameters.
+            $this->assertEmpty($e->debuginfo);
+            $this->assertNull($e->getPrevious());
         }
 
         // The transaction was ended, and the next query can write.

@@ -228,7 +228,7 @@ class external extends external_api {
                 continue;
             }
 
-            $reportclass = new $reportclassname($report);
+            $reportclass = new $reportclassname($report, false);
             if (!$reportclass->check_permissions($USER->id, $reportcontext)) {
                 continue;
             }
