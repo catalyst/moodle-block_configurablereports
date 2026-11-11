@@ -22,6 +22,17 @@ http://moodle.org/mod/data/view.php?d=13&rid=2884
 By Tim Hunt
 
 
+READ-ONLY MODE
+
+The "Block report editing" plugin setting (block_edit) defaults to false. Enable it to prevent everyone,
+including administrators, from creating, importing, editing, duplicating, deleting or changing report visibility.
+Existing reports remain available with their filters, parameters, downloads and report definition exports.
+Direct requests to editing and import endpoints are also blocked.
+
+To enforce this in the site configuration, set:
+$CFG->forced_plugin_settings['block_configurable_reports']['block_edit'] = true;
+
+
 SQL REPORT SECURITY
 
 A SQL report can read anything the database user it runs as can read, so treat the "managesqlreports" capability as

@@ -27,6 +27,9 @@
  */
 
 $string['addreport'] = "Add report";
+$string['block_edit'] = 'Block report editing';
+$string['block_edit_desc'] = 'Prevent everyone, including administrators, from creating, importing, editing, duplicating, deleting or changing the visibility of reports. Existing reports can still be viewed, filtered and exported.';
+$string['reporteditingdisabled'] = 'Report editing has been disabled by the administrator. Existing reports can still be viewed, filtered and exported.';
 $string['blockname'] = "Configurable Reports";
 $string['calcs'] = "Calculations";
 $string['columncalculations'] = "Column Calculations";

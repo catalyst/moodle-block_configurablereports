@@ -72,6 +72,8 @@ if (!$hasreportscap && $report->ownerid != $USER->id) {
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
+cr_require_report_editing_enabled();
+
 if ($report->type === 'sql' && !block_configurable_reports_can_managesqlreports($context)) {
     throw new moodle_exception('nosqlpermissions', 'block_configurable_reports');
 }

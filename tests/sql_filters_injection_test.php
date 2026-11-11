@@ -146,6 +146,28 @@ final class sql_filters_injection_test extends \advanced_testcase {
     }
 
     /**
+     * The editing killswitch does not prevent viewers from changing report filters.
+     */
+    public function test_filters_work_when_editing_is_blocked(): void {
+        $this->resetAfterTest();
+        set_config('block_edit', 1, 'block_configurable_reports');
+        $user = $this->getDataGenerator()->create_user(['firstname' => 'Alice']);
+
+        foreach (['Alice' => [(int) $user->id], 'Zed' => []] as $value => $expected) {
+            $this->assertSame(
+                $expected,
+                $this->run_report(
+                    'searchtext',
+                    (object) [],
+                    '%%FILTER_SEARCHTEXT:u.firstname:=%%',
+                    ['filter_searchtext' => $value],
+                    $user->id
+                )
+            );
+        }
+    }
+
+    /**
      * A submitted value is data: it must not widen the report's WHERE clause.
      *
      * @dataProvider filters_provider

@@ -59,6 +59,8 @@ if (!$hasmanagereportcap && !has_capability('block/configurable_reports:manageow
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
+cr_require_report_editing_enabled();
+
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('incourse');
 
