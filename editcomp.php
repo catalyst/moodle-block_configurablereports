@@ -35,7 +35,7 @@ $comp = required_param('comp', PARAM_ALPHA);
 $courseid = optional_param('courseid', null, PARAM_INT);
 
 if (!$report = $DB->get_record('block_configurable_reports', ['id' => $id])) {
-    throw new moodle_exception('reportdoesnotexists');
+    throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
 }
 
 // Ignore report's courseid, If we are running this report on a specific courseid
@@ -65,15 +65,15 @@ $PAGE->requires->js('/blocks/configurable_reports/js/configurable_reports.js');
 
 $hasreportscap = has_capability('block/configurable_reports:managereports', $context);
 if (!$hasreportscap && !has_capability('block/configurable_reports:manageownreports', $context)) {
-    throw new moodle_exception('badpermissions');
+    throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
 if (!$hasreportscap && $report->ownerid != $USER->id) {
-    throw new moodle_exception('badpermissions');
+    throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
 if ($report->type === 'sql' && !block_configurable_reports_can_managesqlreports($context)) {
-    throw new moodle_exception('nosqlpermissions');
+    throw new moodle_exception('nosqlpermissions', 'block_configurable_reports');
 }
 
 require_once($CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php');
@@ -157,9 +157,7 @@ if ($elements) {
             continue;
         }
 
-        require_once($CFG->dirroot . '/blocks/configurable_reports/components/' . $comp . '/' . $e['pluginname'] .
-            '/plugin.class.php');
-        $pluginclassname = 'plugin_' . $e['pluginname'];
+        $pluginclassname = cr_require_component_plugin($comp, $e['pluginname']);
         $pluginclass = new $pluginclassname($report);
 
         $editcell = '';

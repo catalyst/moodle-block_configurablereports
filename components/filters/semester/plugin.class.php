@@ -61,23 +61,33 @@ class plugin_semester extends plugin_base {
      * @return array|string|string[]
      */
     public function execute($finalelements) {
+        if ($this->report->type === 'sql') {
+            // The SQL filter needs bound parameters, see execute_for_sql_report().
+            throw new coding_exception('SQL reports must use execute_for_sql_report()');
+        }
 
         $filtersemester = optional_param('filter_semester', '', PARAM_RAW);
         if (!$filtersemester) {
             return $finalelements;
         }
 
-        if ($this->report->type !== 'sql') {
-            return [$filtersemester];
+        return [$filtersemester];
+    }
+
+    /**
+     * Applies the filter to an SQL report query, binding the submitted value as a parameter.
+     *
+     * @param string $sql
+     * @param object|null $data
+     * @return array [SQL, DML parameters]
+     */
+    public function execute_for_sql_report(string $sql, ?object $data = null): array {
+        $filtersemester = optional_param('filter_semester', '', PARAM_RAW);
+        if (!$filtersemester) {
+            return [$sql, []];
         }
 
-        if (preg_match("/%%FILTER_SEMESTER:([^%]+)%%/i", $finalelements, $output)) {
-            $replace = ' AND ' . $output[1] . ' LIKE \'%' . $filtersemester . '%\'';
-
-            return str_replace('%%FILTER_SEMESTER:' . $output[1] . '%%', $replace, $finalelements);
-        }
-
-        return $finalelements;
+        return $this->apply_contains_filter($sql, 'FILTER_SEMESTER', $filtersemester);
     }
 
     /**

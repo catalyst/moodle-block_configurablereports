@@ -135,12 +135,8 @@ class customsql_form extends moodleform {
         }
 
         // Simple test to avoid evil stuff in the SQL.
-        $regex = '/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i';
-        if (preg_match($regex, $sql)) {
-            $errors['querysql'] = get_string('notallowedwords', 'block_configurable_reports');
-        } else if (strpos($sql, ';') !== false) {
-            // Do not allow any semicolons.
-            $errors['querysql'] = get_string('nosemicolon', 'block_configurable_reports');
+        if ($error = report_sql::get_query_security_error($sql)) {
+            $errors['querysql'] = get_string($error, 'block_configurable_reports');
         } else if ($CFG->prefix != '' && preg_match('/\b' . $CFG->prefix . '\w+/i', $sql)) {
             // Make sure prefix is prefix_, not explicit.
             $errors['querysql'] = get_string('noexplicitprefix', 'block_configurable_reports');
@@ -189,15 +185,8 @@ class customsql_form extends moodleform {
             return $errors;
         }
 
-        if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
-            // Only allow INSERT|INTO|CREATE in low security.
-            $errors['querysql'] = get_string('notallowedwords', 'block_configurable_reports');
-        } else if (
-            preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) &&
-            empty($CFG->block_configurable_reports_enable_sql_execution)
-        ) {
-            // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
-            $errors['querysql'] = get_string('notallowedwords', 'block_configurable_reports');
+        if ($error = report_sql::get_query_security_error($sql)) {
+            $errors['querysql'] = get_string($error, 'block_configurable_reports');
         } else {
             // Now try running the SQL, and ensure it runs without errors.
             $sql = $this->_customdata['reportclass']->prepare_sql($sql);

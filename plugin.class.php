@@ -121,6 +121,105 @@ abstract class plugin_base {
         return [$this->execute($sql, $data), []];
     }
 
+    /** @var int Counter that keeps the DML parameter names of SQL report filters unique within a request. */
+    private static int $sqlparamcounter = 0;
+
+    /**
+     * Replaces every %%NAME:spec%% placeholder of an SQL report with SQL built by the filter.
+     *
+     * Moodle does not allow repeating a named parameter, so each occurrence gets its own parameter prefix.
+     *
+     * @param string $sql
+     * @param string $name Placeholder name, e.g. FILTER_SEMESTER.
+     * @param callable $build function(string $spec, string $prefix): array [SQL, DML parameters], where the
+     *                        parameters must be named with the prefix.
+     * @return array [SQL, DML parameters]
+     */
+    protected function replace_sql_placeholders(string $sql, string $name, callable $build): array {
+        $params = [];
+        $sql = preg_replace_callback(
+            '/%%' . preg_quote($name, '/') . ':([^%]+)%%/i',
+            function (array $match) use (&$params, $build): string {
+                [$replace, $newparams] = $build($match[1], 'crfilter' . ++self::$sqlparamcounter);
+                $params = array_merge($params, $newparams);
+                return $replace;
+            },
+            $sql
+        );
+
+        return [$sql, $params];
+    }
+
+    /**
+     * Applies a free text value to the %%NAME:field:operator%% placeholders of an SQL report, as bound parameters.
+     *
+     * @param string $sql
+     * @param string $name Placeholder name, e.g. FILTER_SEARCHTEXT.
+     * @param string $value The value submitted by the viewer.
+     * @param string $defaultoperator Operator used when the placeholder does not give one, '' to require it.
+     * @return array [SQL, DML parameters]
+     */
+    protected function apply_text_filter(string $sql, string $name, string $value, string $defaultoperator = ''): array {
+        global $remotedb;
+
+        $operators = ['=', '<', '>', '<=', '>=', '~', 'in'];
+
+        return $this->replace_sql_placeholders(
+            $sql,
+            $name,
+            function (string $spec, string $prefix) use ($remotedb, $operators, $value, $defaultoperator): array {
+                [$field, $operator] = array_pad(explode(':', $spec), 2, '');
+                if ($operator === '') {
+                    $operator = $defaultoperator;
+                }
+                if (!in_array($operator, $operators, true)) {
+                    throw new moodle_exception('nosuchoperator');
+                }
+
+                if ($operator === '~') {
+                    return [' AND ' . $remotedb->sql_like($field, ':' . $prefix, false), [$prefix => '%' . trim($value) . '%']];
+                }
+
+                if ($operator === 'in') {
+                    $conditions = [];
+                    $params = [];
+                    // Accept comma-separated values, allowing for '\,' as a literal comma.
+                    foreach (preg_split("/(?<!\\\\),/", $value) as $key => $item) {
+                        $item = str_replace('\\,', ',', trim(trim($item), '"\''));
+                        $conditions[] = $remotedb->sql_like($field, ':' . $prefix . '_' . $key, false);
+                        $params[$prefix . '_' . $key] = $item;
+                    }
+
+                    // Despite the name, by not actually using in() we can support wildcards, and maybe be more portable as well.
+                    return [' AND (' . implode(' OR ', $conditions) . ')', $params];
+                }
+
+                return [" AND {$field} {$operator} :{$prefix}", [$prefix => $value]];
+            }
+        );
+    }
+
+    /**
+     * Applies a value to the %%NAME:field%% placeholders of an SQL report as a "contains" match on bound parameters.
+     *
+     * @param string $sql
+     * @param string $name Placeholder name, e.g. FILTER_SEMESTER.
+     * @param string $value The value submitted by the viewer, matched literally.
+     * @return array [SQL, DML parameters]
+     */
+    protected function apply_contains_filter(string $sql, string $name, string $value): array {
+        global $remotedb;
+
+        return $this->replace_sql_placeholders(
+            $sql,
+            $name,
+            fn(string $field, string $prefix): array => [
+                ' AND ' . $remotedb->sql_like($field, ':' . $prefix, false),
+                [$prefix => '%' . $remotedb->sql_like_escape($value) . '%'],
+            ]
+        );
+    }
+
     /**
      * colformat
      *

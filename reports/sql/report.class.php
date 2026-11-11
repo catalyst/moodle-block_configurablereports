@@ -79,6 +79,55 @@ class report_sql extends report_base {
     }
 
     /**
+     * Check the query against the keywords allowed by the SQL security setting.
+     *
+     * @param string $sql
+     * @return string|null The error string identifier, or null if the query is allowed.
+     */
+    public static function get_query_security_error(string $sql): ?string {
+        global $CFG;
+
+        if (get_config('block_configurable_reports', 'sqlsecurity')) {
+            if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+                return 'notallowedwords';
+            }
+            if (strpos($sql, ';') !== false) {
+                return 'nosemicolon';
+            }
+
+            return null;
+        }
+
+        if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+            return 'notallowedwords';
+        }
+        // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
+        if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && empty($CFG->block_configurable_reports_enable_sql_execution)) {
+            return 'notallowedwords';
+        }
+
+        return null;
+    }
+
+    /**
+     * Cast the %%FILTER_VAR%% value, so numbers are bound as numbers (needed in arithmetic on PostgreSQL).
+     *
+     * @param string $value
+     * @return int|float|string
+     */
+    protected static function cast_filter_var(string $value) {
+        $value = trim($value);
+        if (preg_match('/^-?\d{1,18}$/', $value)) {
+            return (int) $value;
+        }
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        return $value;
+    }
+
+    /**
      * prepare_sql
      *
      * @param string $sql
@@ -101,13 +150,36 @@ class report_sql extends report_base {
         // Enable debug mode from SQL query.
         $this->config->debug = strpos($sql, '%%DEBUG%%') !== false;
 
-        // Pass special custom undefined variable as filter.
-        // Security warning !!! can be used for sql injection.
-        // Use %%FILTER_VAR%% in your sql code with caution.
-        $filtervar = optional_param('filter_var', '', PARAM_RAW);
-        if (!empty($filtervar)) {
-            $sql = str_replace('%%FILTER_VAR%%', $filtervar, $sql);
-        }
+        // %%FILTER_VAR%% is replaced with the filter_var URL parameter, always bound as a value, so it can be used
+        // anywhere a value is valid: "WHERE cm.id = %%FILTER_VAR%%", "<= %%FILTER_VAR%% * 86400"...
+        // Forget the values bound by a previous call, as the same report object prepares several queries.
+        $this->filterparams = array_filter(
+            $this->filterparams,
+            fn($name) => !preg_match('/^filtervar\d+$/', (string) $name),
+            ARRAY_FILTER_USE_KEY
+        );
+        $filtervar = trim(optional_param('filter_var', '', PARAM_RAW));
+        $i = 0;
+        $filterparams = &$this->filterparams;
+        $sql = preg_replace_callback(
+            '/%%FILTER_VAR%%/',
+            function (array $match) use (&$i, &$filterparams, $filtervar, $sql): string {
+                if ($filtervar === '') {
+                    // Without a value, a placeholder used as a value is NULL, so the report shows no rows instead of
+                    // failing. Anywhere else it is removed, as in reports that add a whole condition with it.
+                    $before = substr($sql, 0, $match[0][1]);
+                    return preg_match('/(?:[=<>!(,+\-*\/|]|\b(?:LIKE|IN|BETWEEN|THEN|ELSE|WHEN))\s*$/i', $before) ? 'NULL' : '';
+                }
+                $name = 'filtervar' . ++$i;
+                $filterparams[$name] = self::cast_filter_var($filtervar);
+                return ':' . $name;
+            },
+            $sql,
+            -1,
+            $count,
+            PREG_OFFSET_CAPTURE
+        );
+        unset($filterparams);
 
         // See http://en.wikipedia.org/wiki/Year_2038_problem.
         $sql = str_replace(
@@ -135,6 +207,11 @@ class report_sql extends report_base {
      */
     public function execute_query($sql) {
         global $remotedb, $DB, $CFG;
+
+        // Imported reports do not go through the form validation, so check the query every time it runs.
+        if ($error = self::get_query_security_error($sql)) {
+            throw new moodle_exception($error, 'block_configurable_reports');
+        }
 
         $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
 
@@ -192,9 +269,7 @@ class report_sql extends report_base {
             $this->filterparams = [];
             if (!empty($filters)) {
                 foreach ($filters as $f) {
-                    require_once($CFG->dirroot . '/blocks/configurable_reports/components/filters/' . $f['pluginname'] .
-                        '/plugin.class.php');
-                    $classname = 'plugin_' . $f['pluginname'];
+                    $classname = cr_require_component_plugin('filters', $f['pluginname']);
                     $class = new $classname($this->config);
                     [$sql, $filterparams] = $class->execute_for_sql_report($sql, $f['formdata']);
                     $this->filterparams = array_merge($this->filterparams, $filterparams);
@@ -212,7 +287,21 @@ class report_sql extends report_base {
                 $formhasdata = true;
             }
 
-            if (($formhasdata || !$filterform) && $rs = $this->execute_query($sql)) {
+            $rs = null;
+            if ($formhasdata || !$filterform) {
+                try {
+                    $rs = $this->execute_query($sql);
+                } catch (dml_read_exception $e) {
+                    // Databases like PostgreSQL refuse comparing a number with text, so a filter_var value of the
+                    // wrong type is an error there. Say so instead of showing a database error.
+                    if (trim(optional_param('filter_var', '', PARAM_RAW)) !== '' && strpos($config->querysql, '%%FILTER_VAR%%') !== false) {
+                        throw new moodle_exception('invalidfiltervar', 'block_configurable_reports', '', null, $e->getMessage());
+                    }
+                    throw $e;
+                }
+            }
+
+            if ($rs) {
                 foreach ($rs as $row) {
                     if (empty($finaltable)) {
                         foreach ($row as $colname => $value) {

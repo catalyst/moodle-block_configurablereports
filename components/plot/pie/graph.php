@@ -36,7 +36,7 @@ $reportid = required_param('reportid', PARAM_INT);
 $courseid = optional_param('courseid', null, PARAM_INT);
 
 if (!$report = $DB->get_record('block_configurable_reports', ['id' => $reportid])) {
-    throw new moodle_exception('reportdoesnotexists');
+    throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
 }
 
 if (!$courseid || !$report->global) {
@@ -72,9 +72,8 @@ $graphs = $components['plot']['elements'];
 if (!empty($graphs)) {
     $series = [];
     foreach ($graphs as $g) {
-        require_once($CFG->dirroot . '/blocks/configurable_reports/components/plot/' . $g['pluginname'] . '/plugin.class.php');
+        $classname = cr_require_component_plugin('plot', $g['pluginname']);
         if ($g['id'] == $id) {
-            $classname = 'plugin_' . $g['pluginname'];
             $class = new $classname($report);
             $series = $class->get_series($g['formdata']);
             $colors = $class->get_color_palette($g['formdata']);

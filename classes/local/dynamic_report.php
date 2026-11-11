@@ -45,6 +45,11 @@ final class dynamic_report extends \report_sql {
     public function execute_query($sql) {
         global $CFG, $DB, $remotedb;
 
+        // Imported reports do not go through the form validation, so check the query every time it runs.
+        if ($error = self::get_query_security_error($sql)) {
+            throw new \moodle_exception($error, 'block_configurable_reports');
+        }
+
         $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
         $reportlimit = get_config('block_configurable_reports', 'reportlimit');
         if (empty($reportlimit)) {

@@ -220,9 +220,67 @@ function cr_unserialize(string $data): array {
     $data = preg_replace('/%60/', '+++', $data);
 
     // TODO remove unserialize.
-    $data = unserialize($data);
+    $data = unserialize($data, ['allowed_classes' => ['stdClass']]);
 
     return (array) urldecode_recursive($data);
+}
+
+/**
+ * Get the plugins of a report component (columns, conditions, filters...).
+ *
+ * @param string $component
+ * @return string[]
+ */
+function cr_get_component_plugins(string $component): array {
+    static $cache = [];
+
+    if (!isset($cache[$component])) {
+        $cache[$component] = [];
+        if (in_array($component, get_list_of_plugins('blocks/configurable_reports/components'), true)) {
+            $cache[$component] = get_list_of_plugins('blocks/configurable_reports/components/' . $component);
+        }
+    }
+
+    return $cache[$component];
+}
+
+/**
+ * Include a component plugin class after checking that the plugin exists.
+ *
+ * @param string $component
+ * @param string $pluginname
+ * @return string The plugin class name.
+ */
+function cr_require_component_plugin(string $component, string $pluginname): string {
+    global $CFG;
+
+    if (!in_array($pluginname, cr_get_component_plugins($component), true)) {
+        throw new moodle_exception('badcomponent', 'block_configurable_reports');
+    }
+    require_once($CFG->dirroot . '/blocks/configurable_reports/components/' . $component . '/' . $pluginname .
+        '/plugin.class.php');
+
+    return 'plugin_' . $pluginname;
+}
+
+/**
+ * Operators allowed in the course and user field conditions.
+ *
+ * @return string[]
+ */
+function cr_get_condition_operators(): array {
+    $operators = ['=', '>', '<', '>=', '<=', '<>', 'LIKE', 'NOT LIKE', 'LIKE % %'];
+
+    return array_combine($operators, $operators);
+}
+
+/**
+ * User table columns that must never be displayed or used in report conditions.
+ *
+ * @return string[]
+ */
+function cr_get_sensitive_user_columns(): array {
+    return ['password', 'secret', 'sesskey'];
 }
 
 /**
@@ -583,8 +641,15 @@ function cr_import_xml(string $xml, object $course) {
     $data = xmlize($xml, 1, 'UTF-8');
 
     if (isset($data['report']['@']['version'])) {
+        // Only these fields can be imported, the rest are set by the current context.
+        $allowedfields = ['visible', 'name', 'summary', 'summaryformat', 'type', 'pagination', 'components', 'export',
+            'jsordering', 'global', 'cron', 'remote', 'displaytotalrecords', 'displayprintbutton'];
+
         $newreport = new stdclass();
         foreach ($data['report']['#'] as $key => $val) {
+            if (!in_array($key, $allowedfields, true)) {
+                continue;
+            }
             if ($key === 'components') {
                 $val[0]['#'] = base64_decode(trim($val[0]['#']));
                 // Fix url_encode " and ' when importing SQL queries.
@@ -597,10 +662,33 @@ function cr_import_xml(string $xml, object $course) {
                     $tempcomponents['customsql']['config']->querysql = $querysql;
                 }
 
-                $val[0]['#'] = cr_serialize($tempcomponents);
+                $val[0]['#'] = cr_serialize(cr_clean_imported_components($tempcomponents));
             }
             $newreport->{$key} = trim($val[0]['#']);
         }
+        // The report type must be one the user is allowed to create in this course (SQL reports need managesqlreports).
+        $allowedtypes = array_keys(cr_get_report_plugins((int) $course->id));
+        if (empty($newreport->type) || !in_array($newreport->type, $allowedtypes, true)) {
+            throw new moodle_exception('nosqlpermissions', 'block_configurable_reports');
+        }
+
+        // Only keep known export formats.
+        $exportformats = array_keys(cr_get_export_plugins());
+        $export = array_intersect(explode(',', $newreport->export ?? ''), $exportformats);
+        $newreport->export = $export ? implode(',', $export) . ',' : '';
+
+        foreach (
+            ['visible', 'summaryformat', 'pagination', 'jsordering', 'global', 'cron', 'remote', 'displaytotalrecords',
+                'displayprintbutton'] as $field
+        ) {
+            if (isset($newreport->{$field})) {
+                $newreport->{$field} = (int) $newreport->{$field};
+            }
+        }
+        $newreport->name = clean_param($newreport->name ?? '', PARAM_TEXT);
+        // Reports are visible by default, as when they are created with the form.
+        $newreport->visible = $newreport->visible ?? 1;
+
         $newreport->courseid = $course->id;
         $newreport->ownerid = $USER->id;
         $newreport->name .= " (" . userdate(time()) . ")";
@@ -613,6 +701,41 @@ function cr_import_xml(string $xml, object $course) {
     }
 
     return false;
+}
+
+/**
+ * Remove the imported components and elements that do not exist in the plugin.
+ *
+ * Imported reports do not go through the component forms, so plugins also validate their data when they run.
+ *
+ * @param array $components
+ * @return array
+ */
+function cr_clean_imported_components(array $components): array {
+    $cleaned = [];
+    $validcomponents = get_list_of_plugins('blocks/configurable_reports/components');
+    foreach ($components as $comp => $compdata) {
+        if (!in_array($comp, $validcomponents, true) || !is_array($compdata)) {
+            continue;
+        }
+        if (isset($compdata['elements'])) {
+            $elements = [];
+            foreach ((array) $compdata['elements'] as $element) {
+                if (!is_array($element) || !isset($element['pluginname']) || !is_string($element['pluginname']) ||
+                        !in_array($element['pluginname'], cr_get_component_plugins($comp), true)) {
+                    continue;
+                }
+                if (!isset($element['formdata']) || !is_object($element['formdata'])) {
+                    $element['formdata'] = new stdClass();
+                }
+                $elements[] = $element;
+            }
+            $compdata['elements'] = $elements;
+        }
+        $cleaned[$comp] = $compdata;
+    }
+
+    return $cleaned;
 }
 
 /**

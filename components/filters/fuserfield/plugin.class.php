@@ -63,33 +63,33 @@ class plugin_fuserfield extends plugin_base {
      */
     public function execute($finalelements, $data) {
         if ($this->report->type === 'sql') {
-            return $this->execute_sql($finalelements, $data);
+            // The SQL filter needs bound parameters, see execute_for_sql_report().
+            throw new coding_exception('SQL reports must use execute_for_sql_report()');
         }
 
         return $this->execute_users($finalelements, $data);
     }
 
     /**
-     * execute_sql
+     * Applies the filter to an SQL report query, binding the submitted value as a parameter.
      *
-     * @param string $finalelements
-     * @param object $data
-     * @return array|mixed|string|string[]
+     * @param string $sql
+     * @param object|null $data
+     * @return array [SQL, DML parameters]
      */
-    private function execute_sql($finalelements, $data) {
+    public function execute_for_sql_report(string $sql, ?object $data = null): array {
         $filterfuserfield = optional_param('filter_fuserfield_' . $data->field, 0, PARAM_BASE64);
-        $filter = base64_decode($filterfuserfield);
-
-        if ($filterfuserfield) {
-            // For backwards compatibility with existing reports.
-            $filtermatch = "FILTER_USERS";
-            $finalelements = $this->sql_replace($filter, $filtermatch, $finalelements);
-
-            $filtermatch = "FILTER_USERS_{$data->field}";
-            $finalelements = $this->sql_replace($filter, $filtermatch, $finalelements);
+        if (!$filterfuserfield) {
+            return [$sql, []];
         }
 
-        return $finalelements;
+        $filter = (string) base64_decode($filterfuserfield);
+
+        // For backwards compatibility with existing reports.
+        [$sql, $params] = $this->apply_text_filter($sql, 'FILTER_USERS', $filter, '~');
+        [$sql, $fieldparams] = $this->apply_text_filter($sql, "FILTER_USERS_{$data->field}", $filter, '~');
+
+        return [$sql, array_merge($params, $fieldparams)];
     }
 
     /**
@@ -161,6 +161,10 @@ class plugin_fuserfield extends plugin_base {
             }
         }
 
+        foreach (cr_get_sensitive_user_columns() as $column) {
+            unset($usercolumns[$column]);
+        }
+
         if (!isset($usercolumns[$formdata->field])) {
             throw new moodle_exception('nosuchcolumn');
         }
@@ -211,59 +215,5 @@ class plugin_fuserfield extends plugin_base {
 
         $mform->addElement('select', 'filter_fuserfield_' . $formdata->field, $selectname, $filteroptions);
         $mform->setType('filter_fuserfield_' . $formdata->field, PARAM_BASE64);
-    }
-
-    /**
-     * sql_replace
-     *
-     * @param string $filtersearchtext
-     * @param string $filterstrmatch
-     * @param string $finalelements
-     * @return array|mixed|string|string[]
-     */
-    private function sql_replace(string $filtersearchtext, $filterstrmatch, $finalelements) {
-        $operators = ['=', '<', '>', '<=', '>=', '~', 'in'];
-
-        // TODO this function is 2 times in the code, should be refactored.
-
-        if (preg_match("/%%$filterstrmatch:([^%]+)%%/i", $finalelements, $output)) {
-            [$field, $operator] = preg_split('/:/', $output[1]);
-            if (empty($operator)) {
-                $operator = '~';
-            } else if (!in_array($operator, $operators)) {
-                throw new moodle_exception('nosuchoperator');
-            }
-            if ($operator === '~') {
-                // TODO can be improved by more native PDO approach.
-                $searchitem = trim(str_replace("'", "''", $filtersearchtext));
-                $replace = " AND " . $field . " LIKE '%" . $searchitem . "%'";
-            } else if ($operator === 'in') {
-                $processeditems = [];
-
-                // TODO can be improved by more native PDO approach.
-                // Accept comma-separated values, allowing for '\,' as a literal comma.
-                foreach (preg_split("/(?<!\\\\),/", $filtersearchtext) as $searchitem) {
-                    // Strip leading/trailing whitespace and quotes (we'll add our own quotes later).
-                    $searchitem = trim($searchitem);
-                    $searchitem = trim($searchitem, '"\'');
-
-                    // We can also safely remove escaped commas now.
-                    $searchitem = str_replace('\\,', ',', $searchitem);
-
-                    // Escape and quote strings...
-                    if (!is_numeric($searchitem)) {
-                        $searchitem = "'" . addslashes($searchitem) . "'";
-                    }
-                    $processeditems[] = "$field like $searchitem";
-                }
-                // Despite the name, by not actually using in() we can support wildcards, and maybe be more portable as well.
-                $replace = " AND (" . implode(" OR ", $processeditems) . ")";
-            } else {
-                $replace = ' AND ' . $field . ' ' . $operator . ' ' . $filtersearchtext;
-            }
-            $finalelements = str_replace('%%' . $filterstrmatch . ':' . $output[1] . '%%', $replace, $finalelements);
-        }
-
-        return $finalelements;
     }
 }
