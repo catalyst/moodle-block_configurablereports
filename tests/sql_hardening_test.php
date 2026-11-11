@@ -342,7 +342,19 @@ final class sql_hardening_test extends advanced_testcase {
             ],
             'no value' => ['ERROR:  division by zero', 'ERROR: division by zero'],
             'only the first line' => ["ERROR:  syntax error\nLINE 1: SELECT secret", 'ERROR: syntax error'],
-            'empty' => ['', ''],
+            'raised by a routine, no delimiter' => [
+                'ERROR:  bad row 17 for admin@example.test',
+                'The database refused the query. The details are in the server log.',
+            ],
+            'known diagnostic followed by a value' => [
+                'ERROR:  division by zero for 17 admin@example.test',
+                'The database refused the query. The details are in the server log.',
+            ],
+            'mysql unrecognised' => [
+                'Duplicate entry secret for key',
+                'The database refused the query. The details are in the server log.',
+            ],
+            'empty' => ['', 'The database refused the query. The details are in the server log.'],
         ];
     }
 

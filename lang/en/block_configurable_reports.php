@@ -295,6 +295,7 @@ $string['nosemicolon'] = "No semicolon";
 $string['notselectstatement'] = "Only SELECT queries are allowed";
 $string['noexplicitprefix'] = "No explicit prefix";
 $string['queryfailed'] = 'Query failed <code><pre>{$a}</pre></code>';
+$string['queryfailedgeneric'] = 'The database refused the query. The details are in the server log.';
 $string['norowsreturned'] = "No rows returned";
 
 $string['listofsqlreports'] = 'Press F11 when cursor is in the editor to toggle full screen editing. Esc can also be used to exit

@@ -122,15 +122,19 @@ class report_sql extends report_base {
      * Make a database error safe to show to report authors and viewers.
      *
      * Databases repeat the value that failed in the message, e.g. invalid input syntax for type integer: "<value>",
-     * which lets a query read any column through its error message. Only the first line is kept, and it is cut at the
-     * first quote or colon after the diagnostic, which is where the databases put the value. It is a best effort:
-     * the full message is only logged on the server.
+     * which lets a query read any column through its error message, and a routine can raise any text. So only
+     * the first line is considered, cut at the first quote or colon (where the databases put the value), and it is
+     * shown only if what is left is one of the known diagnostics below. Anything else is replaced by a generic
+     * message. The full message is only logged on the server.
      *
      * @param string $error The message of the database.
      * @return string
      */
     public static function redact_db_error(string $error): string {
         $line = trim((string) strtok(trim($error), "\n"));
+        if ($line === '') {
+            return get_string('queryfailedgeneric', 'block_configurable_reports');
+        }
 
         $prefix = '';
         if (preg_match('/^(?:ERROR|FATAL|PANIC):\s+/i', $line, $matches)) {
@@ -139,12 +143,36 @@ class report_sql extends report_base {
         }
 
         $cut = strcspn($line, ":\"'`");
-        if ($cut < strlen($line)) {
-            $line = rtrim(substr($line, 0, $cut)) . '…';
+        $diagnostic = rtrim(substr($line, 0, $cut));
+        $suffix = $cut < strlen($line) ? '…' : '';
+
+        $types = 'smallint|integer|bigint|numeric|real|double precision|boolean|date|time|timestamp|uuid|json|jsonb|interval|'
+            . 'timestamp with time zone|timestamp without time zone|time with time zone|time without time zone';
+        $known = [
+            "invalid input syntax for type ($types)",
+            "invalid input syntax for ($types)",
+            '(?:date\/time|timestamp|interval) field value out of range',
+            'numeric field overflow|(?:smallint|integer|bigint|value) out of range',
+            'division by zero',
+            'division by 0',
+            'syntax error(?: at or near| at end of input)?',
+            'column',
+            'relation',
+            'function',
+            'operator does not exist',
+            'permission denied for (?:table|relation|schema|function|column)',
+            'Truncated incorrect (?:INTEGER|DOUBLE|DECIMAL|DATETIME|DATE|TIME) value',
+            'Incorrect (?:INTEGER|DOUBLE|DECIMAL|DATETIME|DATE|TIME) value',
+            'Unknown column',
+            'Table',
+            'You have an error in your SQL syntax; check the manual that corresponds to your \w+ server version for the '
+                . 'right syntax to use near',
+        ];
+        if ($diagnostic === '' || !preg_match('/^(?:' . implode('|', $known) . ')$/i', $diagnostic)) {
+            return get_string('queryfailedgeneric', 'block_configurable_reports');
         }
 
-        // Nothing legitimate is long, and a long one is more likely to carry data.
-        return $prefix . \core_text::substr($line, 0, 200);
+        return $prefix . $diagnostic . $suffix;
     }
 
     /**
