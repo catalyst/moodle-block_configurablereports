@@ -28,6 +28,7 @@ use advanced_testcase;
 use context_course;
 use moodle_exception;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use stdClass;
 
 defined('MOODLE_INTERNAL') || die();
@@ -40,9 +41,10 @@ require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
  *
  * @package    block_configurable_reports
  * @covers     \block_configurable_reports\external
- * @runInSeparateProcess
+ * @runTestsInSeparateProcesses
  */
 #[CoversClass(external::class)]
+#[RunTestsInSeparateProcesses]
 final class external_test extends advanced_testcase {
 
     protected function setUp(): void {

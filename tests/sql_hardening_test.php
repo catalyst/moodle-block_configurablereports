@@ -231,7 +231,11 @@ final class sql_hardening_test extends advanced_testcase {
             $report->execute_query($sql);
             $this->fail('The query was not read only');
         } catch (\block_configurable_reports\local\query_exception $e) {
-            $this->assertStringContainsString('read-only transaction', $e->getMessage());
+            // The database-specific reason is intentionally redacted from report viewers.
+            $this->assertStringContainsString(
+                get_string('queryfailedgeneric', 'block_configurable_reports'),
+                $e->getMessage()
+            );
             // Nothing of the database exception is kept: not the SQL, not the parameters.
             $this->assertEmpty($e->debuginfo);
             $this->assertNull($e->getPrevious());
