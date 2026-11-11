@@ -40,6 +40,7 @@ require_once($CFG->dirroot . '/blocks/configurable_reports/locallib.php');
  *
  * @package    block_configurable_reports
  * @covers     \block_configurable_reports\external
+ * @runInSeparateProcess
  */
 #[CoversClass(external::class)]
 final class external_test extends advanced_testcase {
