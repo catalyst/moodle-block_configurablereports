@@ -224,12 +224,7 @@ class report_sql extends report_base {
 
         $params = $this->filterparams ?: null;
 
-        if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && !empty($CFG->block_configurable_reports_enable_sql_execution)) {
-            // Run special (dangerous) queries directly.
-            $results = $remotedb->execute($sql, $params);
-        } else {
-            $results = $remotedb->get_recordset_sql($sql, $params, 0, $reportlimit);
-        }
+        $results = $remotedb->get_recordset_sql($sql, $params, 0, $reportlimit);
 
         // Update the execution time in the DB.
         $updaterecord = $DB->get_record('block_configurable_reports', ['id' => $this->config->id]);
