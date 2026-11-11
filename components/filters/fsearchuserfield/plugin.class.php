@@ -129,7 +129,7 @@ class plugin_fsearchuserfield extends plugin_base {
                 [$usql, $params] = $remotedb->get_in_or_equal($finalelements);
                 $sql = "$data->field LIKE ? AND id $usql";
                 $params = array_merge(["%$filter%"], $params);
-                if ($elements = $remotedb->get_records_select('user', $sql, $params)) {
+                if ($elements = $remotedb->get_records_select('user', $sql, $params, '', 'id')) {
                     $finalelements = array_keys($elements);
                 }
             }
@@ -175,7 +175,7 @@ class plugin_fsearchuserfield extends plugin_base {
         $reportclass = new $reportclassname($this->report);
 
         if ($this->report->type === 'sql') {
-            $userlist = array_keys($remotedb->get_records('user'));
+            $userlist = array_keys($remotedb->get_records('user', null, '', 'id'));
         } else {
             $components = cr_unserialize($this->report->components);
             $conditions = $components['conditions'] ?? null;

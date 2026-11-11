@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * Library with callbacks.
- *
- * @package    block_configurable_reports
- * @category   check
- * @copyright  2020 Juan Leyva <juan@moodle.com>
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
+namespace block_configurable_reports\local;
 
 /**
- * Add security check.
+ * A SQL report query that the database refused.
  *
- * @return array check
+ * It only carries the redacted message, never the SQL, the parameters or the whole database message, which the
+ * database exception it replaces shows as debugging information. The whole message is only logged on the server.
+ *
+ * @package    block_configurable_reports
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-function block_configurable_reports_security_checks(): array {
-    return [new block_configurable_reports\check\sql_execution()];
+class query_exception extends \moodle_exception {
+    /**
+     * @param string $redactederror The message of the database, see report_sql::redact_db_error().
+     */
+    public function __construct(string $redactederror) {
+        parent::__construct('queryfailed', 'block_configurable_reports', '', s($redactederror));
+    }
 }

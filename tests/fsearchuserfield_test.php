@@ -27,6 +27,15 @@ namespace block_configurable_reports;
  */
 final class fsearchuserfield_test extends \advanced_testcase {
     /**
+     * SQL reports run in a read only transaction of their own, so the test cannot be wrapped in one.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+        $this->resetAfterTest();
+        $this->preventResetByRollback();
+    }
+
+    /**
      * Submitted filter values must not change the report's SQL restrictions.
      *
      * @dataProvider filter_values_provider

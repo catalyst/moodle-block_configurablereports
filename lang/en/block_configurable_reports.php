@@ -90,7 +90,7 @@ $string['embedlinkdescription'] = 'You can copy this link to embed the report in
 $string['cron_help'] = 'Schedule this query to run each day (At night)';
 $string['remote'] = 'Run on remote db';
 $string['remotedescription'] = 'Do you want to run this query on the remote db';
-$string['remote_help'] = 'Do you want to run this query on the remote db';
+$string['remote_help'] = 'Do you want to run this query on the remote db. SQL reports always run on the remote db when it is set up in the plugin settings, whatever this option says.';
 $string['setcourseid'] = 'Set courseid';
 
 // Columns.
@@ -292,6 +292,7 @@ $string['badconditionexpr'] = "Incorrect condition expression";
 
 $string['notallowedwords'] = "Not allowed words";
 $string['nosemicolon'] = "No semicolon";
+$string['notselectstatement'] = "Only SELECT queries are allowed";
 $string['noexplicitprefix'] = "No explicit prefix";
 $string['queryfailed'] = 'Query failed <code><pre>{$a}</pre></code>';
 $string['norowsreturned'] = "No rows returned";
@@ -490,8 +491,6 @@ $string['email_subject'] = 'Subject';
 $string['email_message'] = 'Message';
 $string['email_send'] = 'Send';
 
-$string['sqlsecurity'] = 'SQL Security';
-$string['sqlsecurityinfo'] = 'Disable for executing SQL queries with statements for inserting data';
 $string['allowedsqlusers'] = 'SQL report users';
 $string['allowedsqlusersinfo'] =
     'If you wish to only allow certain admin users to manage sql reports, add a list of usernames separated by commas. They must also have the block/configurable_reports:managesqlreports capability.';
@@ -587,14 +586,6 @@ by new lines in the order you wish them to be used in the pie chart.';
 $string['fieldscourseidhelp_help'] = 'Some configuration pages require the report to return results to extract availiable course fields.
 If your report requires a different course to return results, please select a course that will return them to populate the available course fields.';
 
-$string['checksql_execution'] = 'Block Configurable Reports SQL execution';
-$string['checksql_execution_ok'] = 'SQL execution is disabled.';
-
-$string['checksql_execution_warning'] = 'It is recommended to disable SQL execution to avoid execution of arbitrary SQL code in
-your server.';
-$string['checksql_execution_details'] = 'By allowing SQL code execution there is a potential security issue with users adding
-arbitrary code. SQL code execution should be disable to only allow SQL queries for reading/retreaving data. SQL execution can
-be disabled in your config.php file by setting $CFG->block_configurable_reports_enable_sql_execution to 0';
 $string['csvdelimiter'] = 'CSV delimiter';
 $string['csvdelimiterinfo'] = 'CSV delimiter: "colon" for ":", "comma" for ",", semicolon for ";",  "tab" for "\t" and "cfg" for character configured in "CFG->CSV_DELIMITER" of the config.php file.';
 $string['duplicatedynamicparameter'] = 'A dynamic parameter name can only be used once per report.';
@@ -604,3 +595,4 @@ $string['missingreportclass'] = 'The Configurable Reports report class was not f
 $string['missingreportclassfile'] = 'The Configurable Reports report class file was not found.';
 $string['unresolvedplaceholder'] = 'An unresolved dynamic placeholder remains in the report SQL.';
 $string['invalidfiltervar'] = 'The value of the filter_var parameter is not valid for this report.';
+$string['readonlyunavailable'] = 'This query cannot run read only on the site database here. Ask an administrator to set up the report database connection in the settings of the plugin.';

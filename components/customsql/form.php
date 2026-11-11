@@ -107,21 +107,6 @@ class customsql_form extends moodleform {
      *                     or an empty array if everything is OK (true allowed for backwards compatibility too).
      */
     public function validation($data, $files): array {
-        if (get_config('block_configurable_reports', 'sqlsecurity')) {
-            return $this->validation_high_security($data, $files);
-        }
-
-        return $this->validation_low_security($data, $files);
-    }
-
-    /**
-     * validation_high_security
-     *
-     * @param array $data
-     * @param array $files
-     * @return array
-     */
-    public function validation_high_security($data, $files): array {
         global $CFG;
 
         $errors = parent::validation($data, $files);
@@ -134,66 +119,26 @@ class customsql_form extends moodleform {
             return $errors;
         }
 
-        // Simple test to avoid evil stuff in the SQL.
-        if ($error = report_sql::get_query_security_error($sql)) {
+        // Simple test to avoid evil stuff in the SQL. The same check runs every time the report runs.
+        if ($error = \report_sql::get_query_security_error($sql)) {
             $errors['querysql'] = get_string($error, 'block_configurable_reports');
         } else if ($CFG->prefix != '' && preg_match('/\b' . $CFG->prefix . '\w+/i', $sql)) {
             // Make sure prefix is prefix_, not explicit.
             $errors['querysql'] = get_string('noexplicitprefix', 'block_configurable_reports');
         } else {
             // Now try running the SQL, and ensure it runs without errors.
-
             $sql = $this->_customdata['reportclass']->prepare_sql($sql);
             $rs = null;
             try {
                 $rs = $this->_customdata['reportclass']->execute_query($sql, 2);
-            } catch (dml_read_exception $e) {
-                $errors['querysql'] = get_string('queryfailed', 'block_configurable_reports', $e->error);
+            } catch (\block_configurable_reports\local\query_exception $e) {
+                // Already redacted: the message of the database can contain data read by the query.
+                $errors['querysql'] = get_string('queryfailed', 'block_configurable_reports', $e->a);
+            } catch (moodle_exception $e) {
+                $errors['querysql'] = get_string($e->errorcode, $e->module);
             }
             if ($rs && !empty($data['singlerow'])) {
                 // TODO check where rs_EOF is defined.
-                if (rs_EOF($rs)) {
-                    $errors['querysql'] = get_string('norowsreturned', 'block_configurable_reports');
-                }
-            }
-
-            if ($rs) {
-                $rs->close();
-            }
-        }
-
-        return $errors;
-    }
-
-    /**
-     * validation_low_security
-     *
-     * @param array $data
-     * @param array $files
-     * @return array
-     */
-    public function validation_low_security($data, $files) {
-        global $CFG, $db;
-
-        $errors = parent::validation($data, $files);
-
-        $sql = $data['querysql'];
-        $sql = trim($sql);
-
-        if (!$this->validate_dynamic_parameters($sql)) {
-            $errors['querysql'] = get_string('duplicatedynamicparameter', 'block_configurable_reports');
-            return $errors;
-        }
-
-        if ($error = report_sql::get_query_security_error($sql)) {
-            $errors['querysql'] = get_string($error, 'block_configurable_reports');
-        } else {
-            // Now try running the SQL, and ensure it runs without errors.
-            $sql = $this->_customdata['reportclass']->prepare_sql($sql);
-            $rs = $this->_customdata['reportclass']->execute_query($sql, 2);
-            if (!$rs) {
-                $errors['querysql'] = get_string('queryfailed', 'block_configurable_reports', $db->ErrorMsg());
-            } else if (!empty($data['singlerow'])) {
                 if (rs_EOF($rs)) {
                     $errors['querysql'] = get_string('norowsreturned', 'block_configurable_reports');
                 }

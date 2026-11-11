@@ -29,6 +29,14 @@ namespace block_configurable_reports;
  * @covers     \plugin_base
  */
 final class sql_filters_injection_test extends \advanced_testcase {
+    /**
+     * SQL reports run in a read only transaction of their own, so the test cannot be wrapped in one.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+        $this->preventResetByRollback();
+    }
+
     /** @var string Value that would break out of a quoted literal and match every user. */
     private const PAYLOAD = "x' OR '1'='1";
 

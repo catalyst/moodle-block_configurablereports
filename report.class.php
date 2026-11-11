@@ -100,9 +100,11 @@ abstract class report_base {
      * reports_base
      *
      * @param object|int $report
+     * @param bool $connect Whether to set up the database connection reports run on. Checking who can see a
+     *                      report does not need one, and must not fail when the reporting database is down.
      * @return void
      */
-    public function reports_base($report): void {
+    public function reports_base($report, bool $connect = true): void {
         global $DB, $CFG, $USER, $remotedb;
 
         if (is_numeric($report)) {
@@ -115,19 +117,16 @@ abstract class report_base {
         $this->currentcourseid = $this->config->courseid;
         $this->init();
 
-        // The following enforces a remote connection be used if 'Use remote
-        // connection' is enabled, allowing for admin-enforced isolation,
-        // unlike previously where it might have fallen back to use the main
-        // $DB connection, and fails if remote settings are missing.
+        if (!$connect) {
+            return;
+        }
+
+        // A remote connection, when used, never falls back to the main $DB connection: if its settings are
+        // incomplete, fail early.
         //
-        // WARN: Best-practices still apply. The reports created by users
-        // should route through a connection fit for purpose (e.g. read only,
-        // appropriate access, can view only certain tables, etc.). Also, with
-        // this setting OFF, a user can currently still target the main $DB
-        // connection for their reports.
-        $alwaysuseremote = get_config('block_configurable_reports', 'alwaysuseremote');
-        if ($alwaysuseremote || $this->config->remote) {
-            // Check connection settings are set, otherwise fail early.
+        // WARN: Best-practices still apply. The reports created by users should route through a connection fit
+        // for purpose (e.g. read only, appropriate access, can view only certain tables, etc.).
+        if ($this->uses_remote_db()) {
             $remotedbhost = get_config('block_configurable_reports', 'dbhost');
             $remotedbname = get_config('block_configurable_reports', 'dbname');
             $remotedbuser = get_config('block_configurable_reports', 'dbuser');
@@ -145,12 +144,41 @@ abstract class report_base {
     }
 
     /**
+     * Whether the report runs on the remote database set up in the plugin settings.
+     *
+     * SQL reports ignore the report's "remote" option and use the remote database as soon as any of its settings
+     * is filled in (incomplete settings fail, see reports_base()): an attacker who can write a SQL report must
+     * not be able to opt out of the dedicated connection. Without one, SQL reports run read only on the main
+     * connection, see report_sql::run_read_only().
+     *
+     * @return bool
+     */
+    public function uses_remote_db(): bool {
+        if (get_config('block_configurable_reports', 'alwaysuseremote')) {
+            return true;
+        }
+
+        if (!($this instanceof \report_sql)) {
+            return !empty($this->config->remote);
+        }
+
+        foreach (['dbhost', 'dbname', 'dbuser', 'dbpass'] as $setting) {
+            if (!empty(get_config('block_configurable_reports', $setting))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * __construct
      *
      * @param object|int $report
+     * @param bool $connect Whether to set up the database connection reports run on, see reports_base().
      */
-    public function __construct($report) {
-        $this->reports_base($report);
+    public function __construct($report, bool $connect = true) {
+        $this->reports_base($report, $connect);
     }
 
     /**

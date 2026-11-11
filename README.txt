@@ -22,6 +22,32 @@ http://moodle.org/mod/data/view.php?d=13&rid=2884
 By Tim Hunt
 
 
+SQL REPORT SECURITY
+
+A SQL report can read anything the database user it runs as can read, so treat the "managesqlreports" capability as
+database access, and run the reports as a read only database user:
+
+- Fill in all four remote database settings (dbhost, dbname, dbuser, dbpass) in the plugin settings, or force them in
+  your site root /config.php with $CFG->forced_plugin_settings['block_configurable_reports'] = [...], with a database
+  user that can only SELECT the tables the reports need. It must not read mdl_config, mdl_sessions,
+  mdl_external_tokens or the password column of mdl_user, and must not be a superuser.
+- When they are all set, SQL reports always run on that connection. The "Run on remote db" option of the report is
+  ignored for SQL reports, so a report author cannot opt out of it. If only some of the four settings are filled in,
+  SQL reports fail instead of using the main connection. With none of them, SQL reports run on the main connection
+  (see the read only transaction below).
+- Every query is checked each time it runs, not only when the report is saved, so imported reports are checked too. A
+  query must start with SELECT, WITH or VALUES, and a keyword blocklist applies on top. A blocklist alone cannot be
+  made safe, hence the database user above. SQL reports are read only: INSERT, INTO and CREATE are refused, and the
+  $CFG->block_configurable_reports_enable_sql_execution setting of earlier versions no longer exists. There is no low
+  security mode either: the "SQL Security" setting is gone and queries with a semicolon are always refused.
+- Without the remote database settings, every query runs in a read only transaction (PostgreSQL and MySQL/MariaDB)
+  on the main connection. If that cannot be done, because the database is another one or the code that runs the report
+  already has a transaction open (web service calls do), the query is refused instead of running writable. Set up the
+  remote database settings for these.
+- A database error shows the report author only the start of the message, as the database repeats the values the query
+  read in it. The whole message is written to the PHP error log of the server, and never to the page.
+
+
 VERSIONS HISTORY
 
 4.5.0 (2024051300) for Moodle 4.5

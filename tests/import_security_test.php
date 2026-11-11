@@ -248,7 +248,6 @@ final class import_security_test extends advanced_testcase {
      */
     public function test_execute_query_checks_keywords(): void {
         $this->setAdminUser();
-        set_config('sqlsecurity', 1, 'block_configurable_reports');
 
         $report = new \report_sql($this->create_sql_report('SELECT 1'));
 

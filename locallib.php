@@ -299,7 +299,7 @@ function cr_check_report_permissions($report, int $userid, context $context) {
 
     $classn = 'report_' . $report->type;
 
-    return (new $classn($report->id))->check_permissions($userid, $context);
+    return (new $classn($report->id, false))->check_permissions($userid, $context);
 }
 
 /**

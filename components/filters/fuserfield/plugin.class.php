@@ -126,7 +126,7 @@ class plugin_fuserfield extends plugin_base {
                 [$usql, $params] = $remotedb->get_in_or_equal($finalelements);
                 $sql = "$data->field LIKE ? AND id $usql";
                 $params = array_merge(["%$filter%"], $params);
-                if ($elements = $remotedb->get_records_select('user', $sql, $params)) {
+                if ($elements = $remotedb->get_records_select('user', $sql, $params, '', 'id')) {
                     $finalelements = array_keys($elements);
                 }
             }
@@ -177,7 +177,7 @@ class plugin_fuserfield extends plugin_base {
             if ($formdata->excludedeletedusers) {
                 $conditions['deleted'] = 0;
             }
-            $userlist = array_keys($remotedb->get_records('user', $conditions));
+            $userlist = array_keys($remotedb->get_records('user', $conditions, '', 'id'));
         } else {
             $components = cr_unserialize($this->report->components);
             $conditions = $components['conditions'] ?? null;
