@@ -30,14 +30,16 @@ $top = [];
 $url = new moodle_url('/blocks/configurable_reports/viewreport.php', ['id' => $report->id, 'courseid' => $COURSE->id]);
 $top[] = new tabobject('viewreport', $url, get_string('viewreport', 'block_configurable_reports'));
 
-foreach ($reportclass->components as $comptab) {
-    $urlattrs = ['id' => $report->id, 'comp' => $comptab, 'courseid' => $COURSE->id];
-    $url = new moodle_url('/blocks/configurable_reports/editcomp.php', $urlattrs);
-    $top[] = new tabobject($comptab, $url, get_string($comptab, 'block_configurable_reports'));
-}
+if (!get_config('block_configurable_reports', 'block_edit')) {
+    foreach ($reportclass->components as $comptab) {
+        $urlattrs = ['id' => $report->id, 'comp' => $comptab, 'courseid' => $COURSE->id];
+        $url = new moodle_url('/blocks/configurable_reports/editcomp.php', $urlattrs);
+        $top[] = new tabobject($comptab, $url, get_string($comptab, 'block_configurable_reports'));
+    }
 
-$url = new moodle_url('/blocks/configurable_reports/editreport.php', ['id' => $report->id, 'courseid' => $COURSE->id]);
-$top[] = new tabobject('report', $url, get_string('report', 'block_configurable_reports'));
+    $url = new moodle_url('/blocks/configurable_reports/editreport.php', ['id' => $report->id, 'courseid' => $COURSE->id]);
+    $top[] = new tabobject('report', $url, get_string('report', 'block_configurable_reports'));
+}
 
 $url = new moodle_url('/blocks/configurable_reports/managereport.php', ['courseid' => $course->id]);
 $top[] = new tabobject('managereports', $url, get_string('managereports', 'block_configurable_reports'));

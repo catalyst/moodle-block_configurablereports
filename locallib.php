@@ -24,6 +24,17 @@
  */
 
 /**
+ * Require report editing to be enabled, including for administrators.
+ *
+ * @throws moodle_exception When report editing is disabled.
+ */
+function cr_require_report_editing_enabled(): void {
+    if (get_config('block_configurable_reports', 'block_edit')) {
+        throw new moodle_exception('reporteditingdisabled', 'block_configurable_reports');
+    }
+}
+
+/**
  * cr_print_js_function
  *
  * @return void
@@ -636,6 +647,8 @@ function cr_make_categories_list(&$list, &$parents, $requiredcapability = '', $e
  */
 function cr_import_xml(string $xml, object $course) {
     global $CFG, $DB, $USER;
+
+    cr_require_report_editing_enabled();
 
     require_once($CFG->dirroot . '/lib/xmlize.php');
     $data = xmlize($xml, 1, 'UTF-8');

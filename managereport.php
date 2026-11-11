@@ -54,6 +54,11 @@ $PAGE->set_url('/blocks/configurable_reports/managereport.php', ['courseid' => $
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('incourse');
 
+$blockedit = (bool) get_config('block_configurable_reports', 'block_edit');
+if ($importurl || data_submitted()) {
+    cr_require_report_editing_enabled();
+}
+
 if ($importurl) {
     require_sesskey();
 
@@ -82,17 +87,19 @@ if ($importurl) {
     }
 }
 
-$mform = new import_form(null, $course->id);
+if (!$blockedit) {
+    $mform = new import_form(null, $course->id);
 
-if ($data = $mform->get_data()) {
-    if ($xml = $mform->get_file_content('userfile')) {
-        if (cr_import_xml($xml, $course)) {
-            redirect(
-                "$CFG->wwwroot/blocks/configurable_reports/managereport.php?courseid={$course->id}",
-                get_string('reportcreated', 'block_configurable_reports')
-            );
-        } else {
-            throw new moodle_exception('errorimporting', 'block_configurable_reports');
+    if ($data = $mform->get_data()) {
+        if ($xml = $mform->get_file_content('userfile')) {
+            if (cr_import_xml($xml, $course)) {
+                redirect(
+                    "$CFG->wwwroot/blocks/configurable_reports/managereport.php?courseid={$course->id}",
+                    get_string('reportcreated', 'block_configurable_reports')
+                );
+            } else {
+                throw new moodle_exception('errorimporting', 'block_configurable_reports');
+            }
         }
     }
 }
@@ -111,9 +118,15 @@ $jsmodule = [
     'fullpath' => '/blocks/configurable_reports/js/configurable_reports.js',
     'requires' => ['io'],
 ];
-$PAGE->requires->js_init_call('M.block_configurable_reports.loadReportCategories', null, false, $jsmodule);
+if (!$blockedit) {
+    $PAGE->requires->js_init_call('M.block_configurable_reports.loadReportCategories', null, false, $jsmodule);
+}
 
 echo $OUTPUT->header();
+
+if ($blockedit) {
+    echo $OUTPUT->notification(get_string('reporteditingdisabled', 'block_configurable_reports'), 'info');
+}
 
 if ($reports) {
     $table = new stdclass();
@@ -156,29 +169,32 @@ if ($reports) {
         if ($r->type === 'sql' && !block_configurable_reports_can_managesqlreports($context)) {
             $editcell = '';
         } else {
-            $editcell = '<a title="' . $stredit . '"  href="editreport.php?id=' . $r->id . '">' .
-                $OUTPUT->pix_icon('t/edit', $stredit) .
-                '</a>&nbsp;&nbsp;';
-            $editcell .= '<a title="' . $strdelete . '"  href="editreport.php?id=' . $r->id . '&amp;delete=1&amp;sesskey=' .
-                $USER->sesskey . '">' .
-                $OUTPUT->pix_icon('t/delete', $strdelete) .
-                '</a>&nbsp;&nbsp;';
+            $editcell = '';
+            if (!$blockedit) {
+                $editcell = '<a title="' . $stredit . '"  href="editreport.php?id=' . $r->id . '">' .
+                    $OUTPUT->pix_icon('t/edit', $stredit) .
+                    '</a>&nbsp;&nbsp;';
+                $editcell .= '<a title="' . $strdelete . '"  href="editreport.php?id=' . $r->id . '&amp;delete=1&amp;sesskey=' .
+                    $USER->sesskey . '">' .
+                    $OUTPUT->pix_icon('t/delete', $strdelete) .
+                    '</a>&nbsp;&nbsp;';
 
-            if (!empty($r->visible)) {
-                $editcell .= '<a title="' . $strhide . '" href="editreport.php?id=' . $r->id . '&amp;hide=1&amp;sesskey=' .
+                if (!empty($r->visible)) {
+                    $editcell .= '<a title="' . $strhide . '" href="editreport.php?id=' . $r->id . '&amp;hide=1&amp;sesskey=' .
+                        $USER->sesskey . '">' .
+                        $OUTPUT->pix_icon('t/hide', $strhide) .
+                        '</a> ';
+                } else {
+                    $editcell .= '<a title="' . $strshow . '" href="editreport.php?id=' . $r->id . '&amp;show=1&amp;sesskey=' .
+                        $USER->sesskey . '">' .
+                        $OUTPUT->pix_icon('t/show', $strshow) .
+                        '</a> ';
+                }
+                $editcell .= '<a title="' . $strcopy . '" href="editreport.php?id=' . $r->id . '&amp;duplicate=1&amp;sesskey=' .
                     $USER->sesskey . '">' .
-                    $OUTPUT->pix_icon('t/hide', $strhide) .
-                    '</a> ';
-            } else {
-                $editcell .= '<a title="' . $strshow . '" href="editreport.php?id=' . $r->id . '&amp;show=1&amp;sesskey=' .
-                    $USER->sesskey . '">' .
-                    $OUTPUT->pix_icon('t/show', $strshow) .
-                    '</a> ';
+                    $OUTPUT->pix_icon('t/copy', $strcopy) .
+                    '</a>&nbsp;&nbsp;';
             }
-            $editcell .= '<a title="' . $strcopy . '" href="editreport.php?id=' . $r->id . '&amp;duplicate=1&amp;sesskey=' .
-                $USER->sesskey . '">' .
-                $OUTPUT->pix_icon('t/copy', $strcopy) .
-                '</a>&nbsp;&nbsp;';
             $editcell .= '<a title="' . $strexport . '" href="export.php?id=' . $r->id . '&amp;sesskey=' . $USER->sesskey . '">' .
                 $OUTPUT->pix_icon('t/backup', $strexport) .
                 '</a>&nbsp;&nbsp;';
@@ -217,16 +233,18 @@ if ($reports) {
     echo $OUTPUT->heading(get_string('noreportsavailable', 'block_configurable_reports'));
 }
 
-$addreporturl = $CFG->wwwroot . '/blocks/configurable_reports/editreport.php?courseid=' . $course->id;
-echo $OUTPUT->heading(
-    '<div class="addbutton">
+if (!$blockedit) {
+    $addreporturl = $CFG->wwwroot . '/blocks/configurable_reports/editreport.php?courseid=' . $course->id;
+    echo $OUTPUT->heading(
+        '<div class="addbutton">
                        <a href="' . $addreporturl . '" class="btn btn-secondary">' .
-    get_string('addreport', 'block_configurable_reports') .
-    '</a> </div>'
-);
+        get_string('addreport', 'block_configurable_reports') .
+        '</a> </div>'
+    );
+}
 
 // Repository report import.
-if ($userandrepo = get_config('block_configurable_reports', 'crrepository')) {
+if (!$blockedit && ($userandrepo = get_config('block_configurable_reports', 'crrepository'))) {
     echo html_writer::start_tag('div', ['class' => 'mform']);
     echo html_writer::start_tag('fieldset');
     echo html_writer::tag('legend', get_string('importfromrepository', 'block_configurable_reports'));
@@ -253,6 +271,8 @@ if ($userandrepo = get_config('block_configurable_reports', 'crrepository')) {
     echo html_writer::end_tag('div');
 }
 
-$mform->display();
+if (!$blockedit) {
+    $mform->display();
+}
 
 echo $OUTPUT->footer();

@@ -67,6 +67,8 @@ if (!$hasmanagereportcap && $report->ownerid != $USER->id) {
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
+cr_require_report_editing_enabled();
+
 require_once($CFG->dirroot . '/blocks/configurable_reports/report.class.php');
 require_once($CFG->dirroot . '/blocks/configurable_reports/reports/' . $report->type . '/report.class.php');
 

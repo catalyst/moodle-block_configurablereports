@@ -27,6 +27,15 @@ defined('MOODLE_INTERNAL') || die;
 
 if ($ADMIN->fulltree) {
     $settings->add(
+        new admin_setting_configcheckbox(
+            'block_configurable_reports/block_edit',
+            get_string('block_edit', 'block_configurable_reports'),
+            get_string('block_edit_desc', 'block_configurable_reports'),
+            0
+        )
+    );
+
+    $settings->add(
         new admin_setting_configtext(
             'block_configurable_reports/dbhost',
             get_string('dbhost', 'block_configurable_reports'),
