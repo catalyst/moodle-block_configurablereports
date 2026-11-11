@@ -36,8 +36,10 @@ database access, and run the reports as a read only database user:
   SQL reports fail instead of using the main connection. With none of them, SQL reports run on the main connection
   (see the read only transaction below).
 - Every query is checked each time it runs, not only when the report is saved, so imported reports are checked too. A
-  query must start with SELECT or WITH (unless SQL execution is enabled below, for INSERT, INTO and CREATE), and a
-  keyword blocklist applies on top. A blocklist alone cannot be made safe, hence the database user above.
+  query must start with SELECT, WITH or VALUES, and a keyword blocklist applies on top. A blocklist alone cannot be
+  made safe, hence the database user above. SQL reports are read only: INSERT, INTO and CREATE are refused, and the
+  $CFG->block_configurable_reports_enable_sql_execution setting of earlier versions no longer exists. There is no low
+  security mode either: the "SQL Security" setting is gone and queries with a semicolon are always refused.
 - On PostgreSQL the query runs in a read only transaction, unless the code that runs the report already has a transaction
   open (web service calls do), where the database user above is the protection.
 - A database error shows the report author only the start of the message, as the database repeats the values the query

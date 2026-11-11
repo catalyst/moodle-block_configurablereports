@@ -491,8 +491,6 @@ $string['email_subject'] = 'Subject';
 $string['email_message'] = 'Message';
 $string['email_send'] = 'Send';
 
-$string['sqlsecurity'] = 'SQL Security';
-$string['sqlsecurityinfo'] = 'Disable for executing SQL queries with statements for inserting data';
 $string['allowedsqlusers'] = 'SQL report users';
 $string['allowedsqlusersinfo'] =
     'If you wish to only allow certain admin users to manage sql reports, add a list of usernames separated by commas. They must also have the block/configurable_reports:managesqlreports capability.';
@@ -588,14 +586,6 @@ by new lines in the order you wish them to be used in the pie chart.';
 $string['fieldscourseidhelp_help'] = 'Some configuration pages require the report to return results to extract availiable course fields.
 If your report requires a different course to return results, please select a course that will return them to populate the available course fields.';
 
-$string['checksql_execution'] = 'Block Configurable Reports SQL execution';
-$string['checksql_execution_ok'] = 'SQL execution is disabled.';
-
-$string['checksql_execution_warning'] = 'It is recommended to disable SQL execution to avoid execution of arbitrary SQL code in
-your server.';
-$string['checksql_execution_details'] = 'By allowing SQL code execution there is a potential security issue with users adding
-arbitrary code. SQL code execution should be disable to only allow SQL queries for reading/retreaving data. SQL execution can
-be disabled in your config.php file by setting $CFG->block_configurable_reports_enable_sql_execution to 0';
 $string['csvdelimiter'] = 'CSV delimiter';
 $string['csvdelimiterinfo'] = 'CSV delimiter: "colon" for ":", "comma" for ",", semicolon for ";",  "tab" for "\t" and "cfg" for character configured in "CFG->CSV_DELIMITER" of the config.php file.';
 $string['duplicatedynamicparameter'] = 'A dynamic parameter name can only be used once per report.';

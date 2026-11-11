@@ -81,39 +81,21 @@ class report_sql extends report_base {
     /**
      * Check a query against the rules for SQL reports, wherever it comes from (form, import, saved report).
      *
-     * A keyword blocklist can be bypassed (hex escapes in a DO block, chr() concatenation...), so a query that is
-     * not a write the administrator enabled must also start with SELECT or WITH. The database enforces read only
-     * on top of this, see run_read_only().
+     * SQL reports are read only, there is no way to enable anything else. A keyword blocklist can be bypassed (hex
+     * escapes in a DO block, chr() concatenation...), so a query must also start with SELECT, WITH or VALUES. The
+     * database enforces read only on top of this, see run_read_only().
      *
      * @param string $sql
-     * @param bool $allowwrites Whether the caller can run the INSERT / INTO / CREATE queries SQL execution allows.
      * @return string|null The error string identifier, or null if the query is allowed.
      */
-    public static function get_query_security_error(string $sql, bool $allowwrites = true): ?string {
-        global $CFG;
-
-        $sqlexecution = $allowwrites && !empty($CFG->block_configurable_reports_enable_sql_execution);
-
-        if (get_config('block_configurable_reports', 'sqlsecurity')) {
-            if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
-                return 'notallowedwords';
-            }
-            if (strpos($sql, ';') !== false) {
-                return 'nosemicolon';
-            }
-        } else {
-            if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
-                return 'notallowedwords';
-            }
-            // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
-            if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && !$sqlexecution) {
-                return 'notallowedwords';
-            }
+    public static function get_query_security_error(string $sql): ?string {
+        if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+            return 'notallowedwords';
         }
-
-        // The queries that SQL execution enables are the only ones that are not read only.
-        $iswrite = $sqlexecution && preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql);
-        if (!$iswrite && !self::is_select_statement($sql)) {
+        if (strpos($sql, ';') !== false) {
+            return 'nosemicolon';
+        }
+        if (!self::is_select_statement($sql)) {
             return 'notselectstatement';
         }
 
@@ -295,16 +277,15 @@ class report_sql extends report_base {
      *
      * @param string $sql
      * @param array|null $params
-     * @param bool $allowwrites Whether the queries SQL execution enables can run.
      * @return mixed
      */
-    protected function run_query(string $sql, ?array $params, bool $allowwrites = true) {
+    protected function run_query(string $sql, ?array $params) {
         global $remotedb, $DB, $CFG;
 
         $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
 
         // Imported reports do not go through the form, so check the query every time it runs.
-        if ($error = self::get_query_security_error($sql, $allowwrites)) {
+        if ($error = self::get_query_security_error($sql)) {
             throw new moodle_exception($error, 'block_configurable_reports');
         }
 

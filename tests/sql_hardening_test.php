@@ -68,15 +68,6 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
-     * Set the SQL security setting: high blocks more words and semicolons, low allows more.
-     *
-     * @param bool $high
-     */
-    private function set_security(bool $high): void {
-        set_config('sqlsecurity', $high ? 1 : 0, 'block_configurable_reports');
-    }
-
-    /**
      * Queries that change data or hide a statement from the keyword check.
      *
      * @return array
@@ -122,35 +113,13 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
-     * Statements that are not a SELECT are refused, however their words are hidden, in both security modes.
+     * Statements that are not a SELECT are refused, however their words are hidden.
      *
      * @dataProvider attack_provider
      * @param string $sql
      */
     #[DataProvider('attack_provider')]
     public function test_attacks_are_refused(string $sql): void {
-        $this->resetAfterTest();
-
-        foreach ([true, false] as $high) {
-            $this->set_security($high);
-            $this->assertNotNull(\report_sql::get_query_security_error($sql), 'high security: ' . var_export($high, true));
-        }
-    }
-
-    /**
-     * Enabling SQL execution does not open a DO block, which has none of the words it enables.
-     *
-     * @dataProvider attack_provider
-     * @param string $sql
-     */
-    #[DataProvider('attack_provider')]
-    public function test_attacks_are_refused_with_sql_execution(string $sql): void {
-        global $CFG;
-        $this->resetAfterTest();
-
-        $CFG->block_configurable_reports_enable_sql_execution = 1;
-        $this->set_security(false);
-
         $this->assertNotNull(\report_sql::get_query_security_error($sql));
     }
 
@@ -162,46 +131,27 @@ final class sql_hardening_test extends advanced_testcase {
      */
     #[DataProvider('read_provider')]
     public function test_reads_are_allowed(string $sql): void {
-        $this->resetAfterTest();
-
-        foreach ([true, false] as $high) {
-            $this->set_security($high);
-            $this->assertNull(\report_sql::get_query_security_error($sql), 'high security: ' . var_export($high, true));
-        }
+        $this->assertNull(\report_sql::get_query_security_error($sql));
     }
 
     /**
      * The words that change data are refused, with the same error as in the form.
      */
     public function test_blocked_words_are_refused(): void {
-        $this->resetAfterTest();
-
-        $this->set_security(true);
         $this->assertSame('notallowedwords', \report_sql::get_query_security_error('SELECT 1 FROM t WHERE x = 1 OR y IN (SELECT 1) UPDATE'));
         $this->assertSame('nosemicolon', \report_sql::get_query_security_error('SELECT 1; SELECT 2'));
-
-        $this->set_security(false);
         $this->assertSame('notallowedwords', \report_sql::get_query_security_error('DELETE FROM prefix_user'));
         $this->assertSame('notallowedwords', \report_sql::get_query_security_error('SELECT id FROM prefix_user WHERE LOCK = 1'));
         $this->assertSame('notselectstatement', \report_sql::get_query_security_error('DO $$ BEGIN PERFORM 1 END $$ --'));
     }
 
     /**
-     * INSERT, INTO and CREATE only run when the administrator enabled SQL execution.
+     * Statements that change data are always refused: there is no setting that enables them.
      */
-    public function test_sql_execution_setting_is_respected(): void {
-        global $CFG;
-        $this->resetAfterTest();
-
-        $this->set_security(false);
-        $insert = 'INSERT INTO prefix_log_test SELECT 1';
-
-        $CFG->block_configurable_reports_enable_sql_execution = 0;
-        $this->assertSame('notallowedwords', \report_sql::get_query_security_error($insert));
-
-        $CFG->block_configurable_reports_enable_sql_execution = 1;
-        $this->assertNull(\report_sql::get_query_security_error($insert));
-        $this->assertSame('notallowedwords', \report_sql::get_query_security_error($insert, false));
+    public function test_writes_are_always_refused(): void {
+        foreach (['INSERT INTO prefix_log_test SELECT 1', 'CREATE TABLE prefix_x AS SELECT 1', 'SELECT 1 INTO prefix_x'] as $sql) {
+            $this->assertSame('notallowedwords', \report_sql::get_query_security_error($sql), $sql);
+        }
     }
 
     /**
@@ -441,13 +391,10 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
-     * Dynamic reports go through the same checks, and never run the queries SQL execution enables.
+     * Dynamic reports go through the same checks.
      */
     public function test_dynamic_reports_are_checked(): void {
-        global $CFG;
         $this->resetAfterTest();
-        $CFG->block_configurable_reports_enable_sql_execution = 1;
-        $this->set_security(false);
 
         $sql = "DO E'BEGIN \\x55\\x50\\x44\\x41\\x54\\x45 prefix_config \\x53\\x45\\x54 value=\\x27x\\x27 END' --";
         $record = $this->create_report($sql)->config;

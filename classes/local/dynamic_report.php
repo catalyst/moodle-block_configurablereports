@@ -43,6 +43,6 @@ final class dynamic_report extends \report_sql {
      * @return mixed
      */
     public function execute_query($sql) {
-        return $this->run_query($sql, array_merge($this->queryparams, $this->filterparams), false);
+        return $this->run_query($sql, array_merge($this->queryparams, $this->filterparams));
     }
 }

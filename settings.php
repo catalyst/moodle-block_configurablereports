@@ -87,15 +87,6 @@ if ($ADMIN->fulltree) {
     );
 
     $settings->add(
-        new admin_setting_configcheckbox(
-            'block_configurable_reports/sqlsecurity',
-            get_string('sqlsecurity', 'block_configurable_reports'),
-            get_string('sqlsecurityinfo', 'block_configurable_reports'),
-            1
-        )
-    );
-
-    $settings->add(
         new admin_setting_configtext(
             'block_configurable_reports/crrepository',
             get_string('crrepository', 'block_configurable_reports'),
