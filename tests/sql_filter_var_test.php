@@ -43,6 +43,13 @@ require_once($CFG->dirroot . '/blocks/configurable_reports/reports/sql/report.cl
  */
 #[CoversMethod(\report_sql::class, 'prepare_sql')]
 final class sql_filter_var_test extends advanced_testcase {
+    /**
+     * SQL reports run in a read only transaction of their own, so the test cannot be wrapped in one.
+     */
+    protected function setUp(): void {
+        parent::setUp();
+        $this->preventResetByRollback();
+    }
 
     /** @var string Report query used by most tests */
     private const QUERY = 'SELECT u.id FROM {user} u WHERE u.id = %%FILTER_VAR%% ORDER BY u.id';

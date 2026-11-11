@@ -40,10 +40,12 @@ database access, and run the reports as a read only database user:
   made safe, hence the database user above. SQL reports are read only: INSERT, INTO and CREATE are refused, and the
   $CFG->block_configurable_reports_enable_sql_execution setting of earlier versions no longer exists. There is no low
   security mode either: the "SQL Security" setting is gone and queries with a semicolon are always refused.
-- On PostgreSQL the query runs in a read only transaction, unless the code that runs the report already has a transaction
-  open (web service calls do), where the database user above is the protection.
+- Without the remote database settings, every query runs in a read only transaction (PostgreSQL and MySQL/MariaDB)
+  on the main connection. If that cannot be done, because the database is another one or the code that runs the report
+  already has a transaction open (web service calls do), the query is refused instead of running writable. Set up the
+  remote database settings for these.
 - A database error shows the report author only the start of the message, as the database repeats the values the query
-  read in it. The whole message is in the debugging output for developers.
+  read in it. The whole message is written to the PHP error log of the server, and never to the page.
 
 
 VERSIONS HISTORY

@@ -105,11 +105,15 @@ class report_sql extends report_base {
     /**
      * Whether a query starts with SELECT, WITH or VALUES, ignoring comments, placeholders and opening brackets.
      *
+     * Block comments are only skipped when they have no other comment inside: PostgreSQL nests them, so the end of
+     * the first one is not where the comment ends, and a keyword after it can still be inside the comment. MySQL
+     * runs the code in /*! comments, which are not skipped either.
+     *
      * @param string $sql
      * @return bool
      */
     protected static function is_select_statement(string $sql): bool {
-        $skip = '(?:\s|--[^\n]*(?:\n|$)|\/\*.*?\*\/|%%[^%]*%%|\()*';
+        $skip = '(?:\s|--[^\n]*(?:\n|$)|\/\*(?!!)(?:(?!\/\*|\*\/).)*\*\/|%%[^%]*%%|\()*';
 
         return (bool) preg_match('/^' . $skip . '(?:SELECT|WITH|VALUES)\b/is', $sql);
     }
@@ -117,33 +121,57 @@ class report_sql extends report_base {
     /**
      * Make a database error safe to show to report authors and viewers.
      *
-     * Databases repeat the offending value in the message, e.g. invalid input syntax for type integer: "<value>",
-     * which lets a query read any column through its error message. Everything from the first quote on is dropped.
+     * Databases repeat the value that failed in the message, e.g. invalid input syntax for type integer: "<value>",
+     * which lets a query read any column through its error message. Only the first line is kept, and it is cut at the
+     * first quote or colon after the diagnostic, which is where the databases put the value. It is a best effort:
+     * the full message is only logged on the server.
      *
      * @param string $error The message of the database.
      * @return string
      */
     public static function redact_db_error(string $error): string {
-        $error = trim($error);
-        if (preg_match('/^(.*?)(["\'`]).*$/s', $error, $matches)) {
-            $error = $matches[1] . $matches[2] . '…' . $matches[2];
+        $line = trim((string) strtok(trim($error), "\n"));
+
+        $prefix = '';
+        if (preg_match('/^(?:ERROR|FATAL|PANIC):\s+/i', $line, $matches)) {
+            $prefix = 'ERROR: ';
+            $line = substr($line, strlen($matches[0]));
         }
 
-        // Keep only the first line, the next ones quote the query and the values.
-        return trim(strtok($error, "\n"));
+        $cut = strcspn($line, ":\"'`");
+        if ($cut < strlen($line)) {
+            $line = rtrim(substr($line, 0, $cut)) . '…';
+        }
+
+        // Nothing legitimate is long, and a long one is more likely to carry data.
+        return $prefix . \core_text::substr($line, 0, 200);
     }
 
     /**
-     * Run a query that must not change data, in a read only transaction where the database allows it.
+     * Log the whole message of a database error on the server, where only administrators can read it.
      *
-     * On PostgreSQL the query runs in a transaction that is read only, so the database refuses anything that
-     * writes even if the checks in get_query_security_error() missed it, and the query cannot switch it off.
-     * The transaction is opened with BEGIN READ ONLY and not with Moodle's transaction API, as Moodle's driver
-     * opens a savepoint right after BEGIN, and a mode set after it is lost when the savepoint is released.
+     * It is not shown with debugging(): that is a site wide setting, and the output goes to whoever views the report.
      *
-     * It cannot be done inside a transaction the caller already has open (web service calls run in one): read
-     * only could not be undone for the code that follows. Then the checks and a read only database user (the
-     * remote database settings) are the protection.
+     * @param \Throwable $e
+     * @return void
+     */
+    protected static function log_db_error(\Throwable $e): void {
+        error_log('block_configurable_reports: query failed: ' . ($e->error ?? $e->getMessage()));
+    }
+
+    /**
+     * Run a query that must not change data, in a read only transaction.
+     *
+     * The query runs in a transaction that is read only, so the database refuses anything that writes even if the
+     * checks in get_query_security_error() missed it (a SELECT can call a function that writes), and the query
+     * cannot switch it off. The transaction is opened with BEGIN READ ONLY and not with Moodle's transaction API, as
+     * Moodle's driver opens a savepoint right after BEGIN, and a mode set after it is lost when the savepoint is
+     * released.
+     *
+     * On the main connection, never run without it: if the database is not PostgreSQL or MySQL, or the caller has
+     * a transaction open (web service calls run in one) where read only could not be undone for the code that
+     * follows, the query is refused. The remote database settings give a dedicated connection that does not have
+     * these limits, where the database user must be read only.
      *
      * @param \moodle_database $db
      * @param string $sql
@@ -152,14 +180,25 @@ class report_sql extends report_base {
      * @return \moodle_recordset
      */
     protected function run_read_only(\moodle_database $db, string $sql, ?array $params, int $limit) {
+        global $DB;
+
         // A comment at the end of the query must not swallow the LIMIT the driver appends.
         $sql = rtrim($sql) . "\n";
 
-        if ($db->get_dbfamily() !== 'postgres' || $db->is_transaction_started()) {
+        $begin = [
+            'postgres' => 'BEGIN READ ONLY',
+            'mysql' => 'START TRANSACTION READ ONLY',
+        ][$db->get_dbfamily()] ?? null;
+
+        if ($begin === null || $db->is_transaction_started()) {
+            if ($db === $DB) {
+                throw new moodle_exception('readonlyunavailable', 'block_configurable_reports');
+            }
+
             return $db->get_recordset_sql($sql, $params, 0, $limit);
         }
 
-        $db->execute('BEGIN READ ONLY');
+        $db->execute($begin);
         try {
             // The rows are fetched here, as there is a limit, so the transaction can end before they are read.
             $results = $db->get_recordset_sql($sql, $params, 0, $limit);
@@ -363,10 +402,11 @@ class report_sql extends report_base {
                     // Databases like PostgreSQL refuse comparing a number with text, so a filter_var value of the
                     // wrong type is an error there. Say so instead of showing a database error.
                     if (trim(optional_param('filter_var', '', PARAM_RAW)) !== '' && strpos($config->querysql, '%%FILTER_VAR%%') !== false) {
-                        throw new moodle_exception('invalidfiltervar', 'block_configurable_reports', '', null, $e->getMessage());
+                        self::log_db_error($e);
+                        throw new moodle_exception('invalidfiltervar', 'block_configurable_reports');
                     }
                     // The message of the database can contain data read by the query, so only a redacted one is shown.
-                    debugging($e->error ?? $e->getMessage(), DEBUG_DEVELOPER);
+                    self::log_db_error($e);
                     throw new moodle_exception(
                         'queryfailed',
                         'block_configurable_reports',

@@ -102,7 +102,7 @@ class plugin_users extends plugin_base {
 
             $userslist = $reportclass->elements_by_conditions($conditions);
         } else {
-            $userslist = array_keys($remotedb->get_records('user'));
+            $userslist = array_keys($remotedb->get_records('user', null, '', 'id'));
         }
 
         $usersoptions = [];

@@ -89,6 +89,9 @@ final class sql_hardening_test extends advanced_testcase {
             'EXECUTE a prepared statement' => ['EXECUTE some_statement --'],
             'EXPLAIN' => ['EXPLAIN SELECT 1'],
             'text before the SELECT' => ['x SELECT 1'],
+            'nested comment hides the DO' => ["/* /* */ SELECT 1 */ " . $hex . ' --'],
+            'unclosed nested comment' => ['/* /* */ SELECT 1 */ DO $$ BEGIN PERFORM 1 END $$ --'],
+            'MySQL executable comment' => ['/*!50000 SELECT 1 */ x'],
         ];
     }
 
@@ -109,6 +112,7 @@ final class sql_hardening_test extends advanced_testcase {
             'bracketed union' => ['(SELECT id FROM prefix_user) UNION (SELECT id FROM prefix_course)'],
             'placeholder first' => ['%%DEBUG%% SELECT id FROM prefix_user'],
             'values' => ['VALUES (1), (2)'],
+            'two comments' => ["/* a */ /* b */ SELECT 1"],
         ];
     }
 
@@ -179,10 +183,18 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
+     * A SQL report runs in a read only transaction, which the test cannot be wrapped in.
+     */
+    private function run_outside_transaction(): void {
+        $this->resetAfterTest();
+        $this->preventResetByRollback();
+    }
+
+    /**
      * A comment at the end of a query does not swallow the LIMIT the driver adds.
      */
     public function test_trailing_comment_keeps_the_row_limit(): void {
-        $this->resetAfterTest();
+        $this->run_outside_transaction();
         $this->setAdminUser();
         $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->create_user();
@@ -202,16 +214,14 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
-     * On PostgreSQL the query runs in a read only transaction, which stops a function that writes.
+     * The query runs in a read only transaction, which stops a function that writes.
      */
     public function test_query_runs_in_a_read_only_transaction(): void {
         global $DB;
-        $this->resetAfterTest();
         if ($DB->get_dbfamily() !== 'postgres') {
-            $this->markTestSkipped('Read only transactions are used on PostgreSQL.');
+            $this->markTestSkipped('The write is a PostgreSQL sequence.');
         }
-        // Tests run in a transaction on PostgreSQL, and the query only goes read only when it can start its own.
-        $this->preventResetByRollback();
+        $this->run_outside_transaction();
         $this->assertFalse($DB->is_transaction_started());
 
         // Taking the next value of a sequence is a write.
@@ -230,30 +240,33 @@ final class sql_hardening_test extends advanced_testcase {
     }
 
     /**
-     * Inside a transaction of the caller the query still runs and is still checked, and the caller can write after it.
+     * Inside a transaction of the caller the query is refused on the main connection, as it cannot be read only.
      */
-    public function test_query_in_a_transaction_of_the_caller(): void {
+    public function test_query_in_a_transaction_of_the_caller_is_refused(): void {
         global $DB;
         $this->resetAfterTest();
 
+        // Tests are wrapped in a transaction unless they ask not to be.
         $this->assertTrue($DB->is_transaction_started());
 
         $sql = 'SELECT id FROM prefix_user WHERE id = 2';
         $report = $this->create_report($sql);
-        $rs = $report->execute_query($sql);
-        $this->assertCount(1, iterator_to_array($rs, false));
-        $rs->close();
-        $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
+        try {
+            $report->execute_query($sql);
+            $this->fail('The query ran without a read only transaction');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('readonlyunavailable', $e->errorcode);
+        }
 
-        $this->expectException(\moodle_exception::class);
-        $report->execute_query('DO $$ BEGIN PERFORM 1 END $$ --');
+        // The caller can still write.
+        $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
     }
 
     /**
      * Reports run as before in a read only transaction.
      */
     public function test_reports_still_return_rows(): void {
-        $this->resetAfterTest();
+        $this->run_outside_transaction();
         $user = $this->getDataGenerator()->create_user(['username' => 'rowcheck']);
 
         $sql = "SELECT id, username FROM prefix_user WHERE username = 'rowcheck'";
@@ -271,10 +284,10 @@ final class sql_hardening_test extends advanced_testcase {
      */
     public function test_database_error_does_not_show_data(): void {
         global $DB;
-        $this->resetAfterTest();
         if ($DB->get_dbfamily() !== 'postgres') {
             $this->markTestSkipped('The error needs PostgreSQL to refuse the cast.');
         }
+        $this->run_outside_transaction();
         $this->setAdminUser();
 
         // PostgreSQL says: invalid input syntax for type integer: "<the text>".
@@ -289,8 +302,8 @@ final class sql_hardening_test extends advanced_testcase {
             $this->assertStringContainsString('invalid input syntax for type integer', $e->getMessage());
         }
 
-        // The whole message is only for developers.
-        $this->assertDebuggingCalled();
+        // The whole message is not sent to the page, even with debugging on.
+        $this->assertDebuggingNotCalled();
     }
 
     /**
@@ -302,26 +315,30 @@ final class sql_hardening_test extends advanced_testcase {
         return [
             'postgres cast' => [
                 "ERROR:  invalid input syntax for type integer: \"17:2:admin:manual:admin@example.test\"\nLINE 1: SELECT (x)::int",
-                'ERROR:  invalid input syntax for type integer: "…"',
+                'ERROR: invalid input syntax for type integer…',
             ],
             'value with a quote in it' => [
                 'ERROR:  invalid input syntax for type integer: "a"b-secret"',
-                'ERROR:  invalid input syntax for type integer: "…"',
+                'ERROR: invalid input syntax for type integer…',
             ],
             'value with a new line' => [
                 "ERROR:  invalid input syntax for type integer: \"line one\nsecret line two\"",
-                'ERROR:  invalid input syntax for type integer: "…"',
+                'ERROR: invalid input syntax for type integer…',
+            ],
+            'value that is not quoted' => [
+                'ERROR:  date/time field value out of range: 2020-99-99',
+                'ERROR: date/time field value out of range…',
             ],
             'mysql' => [
                 "Truncated incorrect INTEGER value: 'secret'",
-                "Truncated incorrect INTEGER value: '…'",
+                'Truncated incorrect INTEGER value…',
             ],
             'backticks' => [
                 'Unknown column `secret` in field list',
-                'Unknown column `…`',
+                'Unknown column…',
             ],
-            'no value' => ['ERROR:  division by zero', 'ERROR:  division by zero'],
-            'only the first line' => ["ERROR:  syntax error\nLINE 1: SELECT secret", 'ERROR:  syntax error'],
+            'no value' => ['ERROR:  division by zero', 'ERROR: division by zero'],
+            'only the first line' => ["ERROR:  syntax error\nLINE 1: SELECT secret", 'ERROR: syntax error'],
             'empty' => ['', ''],
         ];
     }
@@ -377,6 +394,10 @@ final class sql_hardening_test extends advanced_testcase {
         } catch (\moodle_exception $e) {
             $this->assertSame('remotedbnotconfigured', $e->errorcode);
         }
+
+        // Checking who can see a report does not connect, so it works when the reporting database is not usable.
+        $this->assertInstanceOf(\report_sql::class, new \report_sql($sqlreport->config, false));
+        cr_check_report_permissions($sqlreport->config, get_admin()->id, \context_system::instance());
 
         // Nothing set up: SQL reports use the main connection, in a read only transaction.
         foreach (['dbhost', 'dbname', 'dbuser'] as $setting) {

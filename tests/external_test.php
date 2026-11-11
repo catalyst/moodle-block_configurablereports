@@ -47,6 +47,8 @@ final class external_test extends advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
+        // SQL reports run in a read only transaction of their own, so the test cannot be wrapped in one.
+        $this->preventResetByRollback();
     }
 
     /**

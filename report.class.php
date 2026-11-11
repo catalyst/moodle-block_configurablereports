@@ -100,9 +100,11 @@ abstract class report_base {
      * reports_base
      *
      * @param object|int $report
+     * @param bool $connect Whether to set up the database connection reports run on. Checking who can see a
+     *                      report does not need one, and must not fail when the reporting database is down.
      * @return void
      */
-    public function reports_base($report): void {
+    public function reports_base($report, bool $connect = true): void {
         global $DB, $CFG, $USER, $remotedb;
 
         if (is_numeric($report)) {
@@ -114,6 +116,10 @@ abstract class report_base {
         $this->currentuser = $USER;
         $this->currentcourseid = $this->config->courseid;
         $this->init();
+
+        if (!$connect) {
+            return;
+        }
 
         // A remote connection, when used, never falls back to the main $DB connection: if its settings are
         // incomplete, fail early.
@@ -169,9 +175,10 @@ abstract class report_base {
      * __construct
      *
      * @param object|int $report
+     * @param bool $connect Whether to set up the database connection reports run on, see reports_base().
      */
-    public function __construct($report) {
-        $this->reports_base($report);
+    public function __construct($report, bool $connect = true) {
+        $this->reports_base($report, $connect);
     }
 
     /**
