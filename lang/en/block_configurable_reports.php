@@ -90,7 +90,7 @@ $string['embedlinkdescription'] = 'You can copy this link to embed the report in
 $string['cron_help'] = 'Schedule this query to run each day (At night)';
 $string['remote'] = 'Run on remote db';
 $string['remotedescription'] = 'Do you want to run this query on the remote db';
-$string['remote_help'] = 'Do you want to run this query on the remote db';
+$string['remote_help'] = 'Do you want to run this query on the remote db. SQL reports always run on the remote db when it is set up in the plugin settings, whatever this option says.';
 $string['setcourseid'] = 'Set courseid';
 
 // Columns.
@@ -292,6 +292,7 @@ $string['badconditionexpr'] = "Incorrect condition expression";
 
 $string['notallowedwords'] = "Not allowed words";
 $string['nosemicolon'] = "No semicolon";
+$string['notselectstatement'] = "Only SELECT queries are allowed";
 $string['noexplicitprefix'] = "No explicit prefix";
 $string['queryfailed'] = 'Query failed <code><pre>{$a}</pre></code>';
 $string['norowsreturned'] = "No rows returned";

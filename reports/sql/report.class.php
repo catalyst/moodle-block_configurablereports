@@ -79,13 +79,20 @@ class report_sql extends report_base {
     }
 
     /**
-     * Check the query against the keywords allowed by the SQL security setting.
+     * Check a query against the rules for SQL reports, wherever it comes from (form, import, saved report).
+     *
+     * A keyword blocklist can be bypassed (hex escapes in a DO block, chr() concatenation...), so a query that is
+     * not a write the administrator enabled must also start with SELECT or WITH. The database enforces read only
+     * on top of this, see run_read_only().
      *
      * @param string $sql
+     * @param bool $allowwrites Whether the caller can run the INSERT / INTO / CREATE queries SQL execution allows.
      * @return string|null The error string identifier, or null if the query is allowed.
      */
-    public static function get_query_security_error(string $sql): ?string {
+    public static function get_query_security_error(string $sql, bool $allowwrites = true): ?string {
         global $CFG;
+
+        $sqlexecution = $allowwrites && !empty($CFG->block_configurable_reports_enable_sql_execution);
 
         if (get_config('block_configurable_reports', 'sqlsecurity')) {
             if (preg_match('/\b(ALTER|CREATE|DELETE|DROP|GRANT|INSERT|INTO|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
@@ -94,19 +101,93 @@ class report_sql extends report_base {
             if (strpos($sql, ';') !== false) {
                 return 'nosemicolon';
             }
-
-            return null;
+        } else {
+            if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
+                return 'notallowedwords';
+            }
+            // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
+            if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && !$sqlexecution) {
+                return 'notallowedwords';
+            }
         }
 
-        if (preg_match('/\b(ALTER|DELETE|DROP|GRANT|TRUNCATE|UPDATE|SET|VACUUM|REINDEX|DISCARD|LOCK)\b/i', $sql)) {
-            return 'notallowedwords';
-        }
-        // Only allow INSERT|INTO|CREATE in low security when SQL execution is enabled in the server.
-        if (preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql) && empty($CFG->block_configurable_reports_enable_sql_execution)) {
-            return 'notallowedwords';
+        // The queries that SQL execution enables are the only ones that are not read only.
+        $iswrite = $sqlexecution && preg_match('/\b(INSERT|INTO|CREATE)\b/i', $sql);
+        if (!$iswrite && !self::is_select_statement($sql)) {
+            return 'notselectstatement';
         }
 
         return null;
+    }
+
+    /**
+     * Whether a query starts with SELECT, WITH or VALUES, ignoring comments, placeholders and opening brackets.
+     *
+     * @param string $sql
+     * @return bool
+     */
+    protected static function is_select_statement(string $sql): bool {
+        $skip = '(?:\s|--[^\n]*(?:\n|$)|\/\*.*?\*\/|%%[^%]*%%|\()*';
+
+        return (bool) preg_match('/^' . $skip . '(?:SELECT|WITH|VALUES)\b/is', $sql);
+    }
+
+    /**
+     * Make a database error safe to show to report authors and viewers.
+     *
+     * Databases repeat the offending value in the message, e.g. invalid input syntax for type integer: "<value>",
+     * which lets a query read any column through its error message. Everything from the first quote on is dropped.
+     *
+     * @param string $error The message of the database.
+     * @return string
+     */
+    public static function redact_db_error(string $error): string {
+        $error = trim($error);
+        if (preg_match('/^(.*?)(["\'`]).*$/s', $error, $matches)) {
+            $error = $matches[1] . $matches[2] . '…' . $matches[2];
+        }
+
+        // Keep only the first line, the next ones quote the query and the values.
+        return trim(strtok($error, "\n"));
+    }
+
+    /**
+     * Run a query that must not change data, in a read only transaction where the database allows it.
+     *
+     * On PostgreSQL the query runs in a transaction that is read only, so the database refuses anything that
+     * writes even if the checks in get_query_security_error() missed it, and the query cannot switch it off.
+     * The transaction is opened with BEGIN READ ONLY and not with Moodle's transaction API, as Moodle's driver
+     * opens a savepoint right after BEGIN, and a mode set after it is lost when the savepoint is released.
+     *
+     * It cannot be done inside a transaction the caller already has open (web service calls run in one): read
+     * only could not be undone for the code that follows. Then the checks and a read only database user (the
+     * remote database settings) are the protection.
+     *
+     * @param \moodle_database $db
+     * @param string $sql
+     * @param array|null $params
+     * @param int $limit
+     * @return \moodle_recordset
+     */
+    protected function run_read_only(\moodle_database $db, string $sql, ?array $params, int $limit) {
+        // A comment at the end of the query must not swallow the LIMIT the driver appends.
+        $sql = rtrim($sql) . "\n";
+
+        if ($db->get_dbfamily() !== 'postgres' || $db->is_transaction_started()) {
+            return $db->get_recordset_sql($sql, $params, 0, $limit);
+        }
+
+        $db->execute('BEGIN READ ONLY');
+        try {
+            // The rows are fetched here, as there is a limit, so the transaction can end before they are read.
+            $results = $db->get_recordset_sql($sql, $params, 0, $limit);
+        } catch (\Throwable $e) {
+            $db->execute('ROLLBACK');
+            throw $e;
+        }
+        $db->execute('COMMIT');
+
+        return $results;
     }
 
     /**
@@ -206,14 +287,26 @@ class report_sql extends report_base {
      * @return mixed
      */
     public function execute_query($sql) {
+        return $this->run_query($sql, $this->filterparams ?: null);
+    }
+
+    /**
+     * Check and run a report query. Every way of running a SQL report goes through here.
+     *
+     * @param string $sql
+     * @param array|null $params
+     * @param bool $allowwrites Whether the queries SQL execution enables can run.
+     * @return mixed
+     */
+    protected function run_query(string $sql, ?array $params, bool $allowwrites = true) {
         global $remotedb, $DB, $CFG;
 
-        // Imported reports do not go through the form validation, so check the query every time it runs.
-        if ($error = self::get_query_security_error($sql)) {
+        $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
+
+        // Imported reports do not go through the form, so check the query every time it runs.
+        if ($error = self::get_query_security_error($sql, $allowwrites)) {
             throw new moodle_exception($error, 'block_configurable_reports');
         }
-
-        $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
 
         $reportlimit = get_config('block_configurable_reports', 'reportlimit');
         if (empty($reportlimit) || $reportlimit == '0') {
@@ -222,9 +315,7 @@ class report_sql extends report_base {
 
         $starttime = microtime(true);
 
-        $params = $this->filterparams ?: null;
-
-        $results = $remotedb->get_recordset_sql($sql, $params, 0, $reportlimit);
+        $results = $this->run_read_only($remotedb, $sql, $params, (int) $reportlimit);
 
         // Update the execution time in the DB.
         $updaterecord = $DB->get_record('block_configurable_reports', ['id' => $this->config->id]);
@@ -235,6 +326,7 @@ class report_sql extends report_base {
 
         return $results;
     }
+
 
     /**
      * create_report
@@ -292,7 +384,14 @@ class report_sql extends report_base {
                     if (trim(optional_param('filter_var', '', PARAM_RAW)) !== '' && strpos($config->querysql, '%%FILTER_VAR%%') !== false) {
                         throw new moodle_exception('invalidfiltervar', 'block_configurable_reports', '', null, $e->getMessage());
                     }
-                    throw $e;
+                    // The message of the database can contain data read by the query, so only a redacted one is shown.
+                    debugging($e->error ?? $e->getMessage(), DEBUG_DEVELOPER);
+                    throw new moodle_exception(
+                        'queryfailed',
+                        'block_configurable_reports',
+                        '',
+                        s(self::redact_db_error((string) ($e->error ?? '')))
+                    );
                 }
             }
 

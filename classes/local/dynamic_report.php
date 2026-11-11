@@ -43,27 +43,6 @@ final class dynamic_report extends \report_sql {
      * @return mixed
      */
     public function execute_query($sql) {
-        global $CFG, $DB, $remotedb;
-
-        // Imported reports do not go through the form validation, so check the query every time it runs.
-        if ($error = self::get_query_security_error($sql)) {
-            throw new \moodle_exception($error, 'block_configurable_reports');
-        }
-
-        $sql = preg_replace('/\bprefix_(?=\w+)/i', $CFG->prefix, $sql);
-        $reportlimit = get_config('block_configurable_reports', 'reportlimit');
-        if (empty($reportlimit)) {
-            $reportlimit = BLOCK_CONFIGURABLE_REPORTS_MAX_RECORDS;
-        }
-
-        $starttime = microtime(true);
-        $results = $remotedb->get_recordset_sql($sql, array_merge($this->queryparams, $this->filterparams), 0, $reportlimit);
-
-        $updaterecord = $DB->get_record('block_configurable_reports', ['id' => $this->config->id]);
-        $updaterecord->lastexecutiontime = round((microtime(true) - $starttime) * 1000);
-        $this->config->lastexecutiontime = $updaterecord->lastexecutiontime;
-        $DB->update_record('block_configurable_reports', $updaterecord);
-
-        return $results;
+        return $this->run_query($sql, array_merge($this->queryparams, $this->filterparams), false);
     }
 }
