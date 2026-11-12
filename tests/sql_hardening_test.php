@@ -261,20 +261,26 @@ final class sql_hardening_test extends advanced_testcase {
         global $DB;
         $this->resetAfterTest();
 
-        // Tests are wrapped in a transaction unless they ask not to be.
+        // Only some databases wrap tests in a transaction (PostgreSQL does, MySQL and MariaDB do not), so the test
+        // opens the transaction of the caller itself.
+        $transaction = $DB->start_delegated_transaction();
         $this->assertTrue($DB->is_transaction_started());
 
-        $sql = 'SELECT id FROM prefix_user WHERE id = 2';
-        $report = $this->create_report($sql);
         try {
-            $report->execute_query($sql);
-            $this->fail('The query ran without a read only transaction');
-        } catch (\moodle_exception $e) {
-            $this->assertSame('readonlyunavailable', $e->errorcode);
-        }
+            $sql = 'SELECT id FROM prefix_user WHERE id = 2';
+            $report = $this->create_report($sql);
+            try {
+                $report->execute_query($sql);
+                $this->fail('The query ran without a read only transaction');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('readonlyunavailable', $e->errorcode);
+            }
 
-        // The caller can still write.
-        $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
+            // The caller can still write.
+            $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
+        } finally {
+            $transaction->allow_commit();
+        }
     }
 
     /**
