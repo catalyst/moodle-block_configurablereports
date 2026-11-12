@@ -400,3 +400,13 @@ Release date Thursday, 29 September 2011, 10:47 AM
 1.0 (2010090100) for Moodle 1.9
 Release date Thursday, 29 September 2011, 10:38 AM
 ----------------------------------------------------------------------
+
+
+SECURITY OF SQL REPORTS
+
+SQL reports run their query on the Moodle database, so whoever writes them can read any data in it, including session
+ids, web service tokens and password hashes. Treat the block/configurable_reports:managesqlreports capability as
+equivalent to site administration: only grant it to site administrators, and list the users allowed to write SQL
+reports in the "SQL report users" (allowedsqlusers) setting. Queries run read only and are checked against a list of
+keywords and functions, which is a safeguard and not a sandbox: for real isolation set up the report database
+connection in the settings of the plugin, with a database user that can only read what reports need.
