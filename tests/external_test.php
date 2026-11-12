@@ -60,12 +60,15 @@ final class external_test extends advanced_testcase {
      * @param int $courseid The course the report belongs to.
      * @param int $global Whether the report may run in any course.
      * @param string $type The report type.
+     * @param array $permissions The permission elements of the report.
      * @return stdClass The report record.
      */
-    private function create_users_report(int $courseid, int $global = 0, string $type = 'users'): stdClass {
+    private function create_users_report(int $courseid, int $global = 0, string $type = 'users',
+            array $permissions = []): stdClass {
         global $DB;
 
         $components = [
+            'permissions' => ['elements' => $permissions],
             'columns' => [
                 'elements' => [
                     [
@@ -164,6 +167,51 @@ final class external_test extends advanced_testcase {
 
         $this->assertSame('', $result['warnings']);
         $this->assertStringContainsString('readertwo', $result['data']);
+    }
+
+    /**
+     * Managing reports in the caller's course does not skip the permissions of a global report.
+     */
+    public function test_a_global_report_keeps_its_permissions_in_another_course(): void {
+        $reportcourse = $this->getDataGenerator()->create_course();
+        $othercourse = $this->getDataGenerator()->create_course();
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->make_manager($user->id, $othercourse->id);
+
+        // Only users who can view site reports may read it, besides those managing reports in its own course.
+        $permissions = [
+            ['id' => 'p1', 'pluginname' => 'reportscapabilities', 'formdata' => new stdClass()],
+        ];
+        $report = $this->create_users_report($reportcourse->id, 1, 'users', $permissions);
+        $this->setUser($user);
+
+        $this->expectException(moodle_exception::class);
+        $this->expectExceptionMessage(get_string('badpermissions', 'block_configurable_reports'));
+        external::get_report_data($report->id, $othercourse->id);
+    }
+
+    /**
+     * Someone who manages the course a global report belongs to can still read it in another course.
+     */
+    public function test_a_global_report_is_managed_in_its_own_course(): void {
+        $reportcourse = $this->getDataGenerator()->create_course();
+        $othercourse = $this->getDataGenerator()->create_course();
+
+        $user = $this->getDataGenerator()->create_user(['username' => 'readerthree']);
+        $this->make_manager($user->id, $reportcourse->id);
+        $this->getDataGenerator()->enrol_user($user->id, $othercourse->id, 'student');
+
+        $permissions = [
+            ['id' => 'p1', 'pluginname' => 'reportscapabilities', 'formdata' => new stdClass()],
+        ];
+        $report = $this->create_users_report($reportcourse->id, 1, 'users', $permissions);
+        $this->setUser($user);
+
+        $result = external::get_report_data($report->id, $othercourse->id);
+
+        $this->assertSame('', $result['warnings']);
+        $this->assertStringContainsString('readerthree', $result['data']);
     }
 
     /**

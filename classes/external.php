@@ -94,6 +94,7 @@ class external extends external_api {
         } else {
             // Permissions are always checked in the report's own course, only global reports can run in another course.
             $courseid = (int) $params['courseid'];
+            $report->homecourseid = $report->courseid;
             if ($courseid && $report->global) {
                 $report->courseid = $courseid;
             } else {
