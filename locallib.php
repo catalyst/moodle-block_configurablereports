@@ -184,14 +184,14 @@ function urldecode_recursive($var) {
 function cr_get_my_reports(int $courseid, int $userid, bool $allcourses = true): array {
     global $DB;
 
-    if ($courseid === SITEID) {
+    if ($courseid == SITEID) {
         $context = context_system::instance();
     } else {
         $context = context_course::instance($courseid);
     }
 
     if (has_capability('block/configurable_reports:managereports', $context, $userid)) {
-        if ($courseid === SITEID && $allcourses) {
+        if ($courseid == SITEID && $allcourses) {
             $reports = $DB->get_records('block_configurable_reports', null, 'name ASC');
         } else {
             $reports = $DB->get_records('block_configurable_reports', ['courseid' => $courseid], 'name ASC');
@@ -321,7 +321,7 @@ function cr_check_report_permissions($report, int $userid, context $context) {
  */
 function cr_get_report_plugins(int $courseid): array {
     $pluginoptions = [];
-    $context = ($courseid === SITEID) ? context_system::instance() : context_course::instance($courseid);
+    $context = ($courseid == SITEID) ? context_system::instance() : context_course::instance($courseid);
     $plugins = get_list_of_plugins('blocks/configurable_reports/reports');
 
     if ($plugins) {

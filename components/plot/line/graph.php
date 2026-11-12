@@ -46,7 +46,7 @@ if (!$course = $DB->get_record('course', ['id' => $courseid])) {
 }
 
 // Force user login in course (SITE or Course).
-if ((int) $course->id === SITEID) {
+if ($course->id == SITEID) {
     require_login();
     $context = context_system::instance();
 } else {
