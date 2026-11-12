@@ -600,3 +600,4 @@ $string['missingreportclassfile'] = 'The Configurable Reports report class file 
 $string['unresolvedplaceholder'] = 'An unresolved dynamic placeholder remains in the report SQL.';
 $string['invalidfiltervar'] = 'The value of the filter_var parameter is not valid for this report.';
 $string['readonlyunavailable'] = 'This query cannot run read only on the site database here. Ask an administrator to set up the report database connection in the settings of the plugin.';
+$string['cachedef_graphdata'] = 'Data of the report charts, kept for the images that draw them';

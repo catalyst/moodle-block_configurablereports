@@ -365,7 +365,7 @@ abstract class report_base {
         if ($graphs) {
             foreach ($graphs as $g) {
                 $output .= '<div class="centerpara">';
-                $output .= ' <img src="' . $g . '" alt="' . s($this->config->name) . '"><br />';
+                $output .= ' <img src="' . s($g) . '" alt="' . s($this->config->name) . '"><br />';
                 $output .= '</div>';
             }
         }

@@ -63,8 +63,6 @@ class plugin_line extends plugin_base {
      * @return string
      */
     public function execute($id, $data, $finalreport) {
-        global $CFG;
-
         $series = [];
         $data->xaxis--;
         $data->yaxis--;
@@ -83,35 +81,11 @@ class plugin_line extends plugin_base {
             }
         }
 
-        $params = '';
-
-        $i = 0;
+        $graphseries = [];
         foreach ($series as $h => $s) {
-            $params .= "&amp;serie$i=" . base64_encode($sname[$h] . '||' . implode(',', $s));
-            $i++;
+            $graphseries[] = ['serie' => $s, 'name' => (string) $sname[$h]];
         }
 
-        return $CFG->wwwroot . '/blocks/configurable_reports/components/plot/line/graph.php?reportid=' . $this->report->id .
-            '&id=' . $id . $params . '&amp;min=' . $minvalue . '&amp;max=' . $maxvalue  . '&courseid=' . $this->report->courseid;
-    }
-
-    /**
-     * Get series
-     *
-     * @return array
-     */
-    public function get_series(): array {
-        $series = [];
-
-        // TODO don't use $_GET.
-        foreach ($_GET as $key => $val) {
-            if (strpos($key, 'serie') !== false) {
-                $id = (int) str_replace('serie', '', $key);
-                [$name, $values] = explode('||', base64_decode($val));
-                $series[$id] = ['serie' => explode(',', $values), 'name' => $name];
-            }
-        }
-
-        return $series;
+        return cr_get_graph_url('line', $this->report, $id, ['series' => $graphseries, 'min' => $minvalue, 'max' => $maxvalue]);
     }
 }

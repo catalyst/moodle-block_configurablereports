@@ -174,6 +174,45 @@ function urldecode_recursive($var) {
 }
 
 /**
+ * Keep the data of a report chart in the session, for the image that draws it, and return the image URL.
+ *
+ * The data used to travel in the image URL, which wrote report data to the web server logs, broke long reports
+ * and let anyone draw any data under the name of a report.
+ *
+ * @param string $plot The plot plugin.
+ * @param object $report The report record.
+ * @param string $id The id of the chart in the report.
+ * @param array $data The data the chart draws.
+ * @return string
+ */
+function cr_get_graph_url(string $plot, object $report, string $id, array $data): string {
+    $key = $report->id . '_' . $id . '_' . sha1(serialize($data));
+    cache::make('block_configurable_reports', 'graphdata')->set($key, $data);
+
+    $params = ['reportid' => $report->id, 'id' => $id, 'courseid' => $report->courseid, 'key' => $key];
+
+    return (new moodle_url('/blocks/configurable_reports/components/plot/' . $plot . '/graph.php', $params))->out(false);
+}
+
+/**
+ * The data of the report chart an image draws, kept by cr_get_graph_url().
+ *
+ * @param int $reportid
+ * @param string $id The id of the chart in the report.
+ * @return array Empty when the session does not have it.
+ */
+function cr_get_graph_data(int $reportid, string $id): array {
+    $key = required_param('key', PARAM_ALPHANUMEXT);
+    // The key names the chart it was kept for, so it cannot draw the data of another one.
+    if (strpos($key, $reportid . '_' . $id . '_') !== 0) {
+        return [];
+    }
+    $data = cache::make('block_configurable_reports', 'graphdata')->get($key);
+
+    return is_array($data) ? $data : [];
+}
+
+/**
  * cr_get_my_reports
  *
  * @param int $courseid
