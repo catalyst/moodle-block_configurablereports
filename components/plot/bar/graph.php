@@ -46,7 +46,7 @@ if (!$course = $DB->get_record('course', ['id' => $courseid])) {
 }
 
 // Force user login in course (SITE or Course).
-if ((int) $courseid === SITEID) {
+if ($courseid == SITEID) {
     require_login();
     $context = context_system::instance();
 } else {
@@ -71,8 +71,7 @@ if (!empty($graphs)) {
     foreach ($graphs as $g) {
         $classname = cr_require_component_plugin('plot', $g['pluginname']);
         if ($g['id'] == $id) {
-            $class = new $classname($report);
-            $series = $class->get_series($g['formdata']);
+            $series = cr_get_graph_data($report->id, $id);
             break;
         }
     }

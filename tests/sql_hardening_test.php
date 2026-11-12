@@ -92,6 +92,13 @@ final class sql_hardening_test extends advanced_testcase {
             'nested comment hides the DO' => ["/* /* */ SELECT 1 */ " . $hex . ' --'],
             'unclosed nested comment' => ['/* /* */ SELECT 1 */ DO $$ BEGIN PERFORM 1 END $$ --'],
             'MySQL executable comment' => ['/*!50000 SELECT 1 */ x'],
+            'kills another connection' => ['SELECT pg_terminate_backend(pid) FROM pg_stat_activity'],
+            'changes a setting of the connection' => ["SELECT set_config('statement_timeout', '1', false)"],
+            'schema qualified function' => ["SELECT pg_catalog.set_config('statement_timeout', '1', false)"],
+            'advisory lock' => ['SELECT pg_advisory_lock(1)'],
+            'holds the server up' => ['SELECT pg_sleep(60)'],
+            'MySQL lock' => ["SELECT GET_LOCK('x', 60)"],
+            'MySQL benchmark' => ["SELECT BENCHMARK(100000000, MD5('x'))"],
         ];
     }
 
@@ -113,6 +120,7 @@ final class sql_hardening_test extends advanced_testcase {
             'placeholder first' => ['%%DEBUG%% SELECT id FROM prefix_user'],
             'values' => ['VALUES (1), (2)'],
             'two comments' => ["/* a */ /* b */ SELECT 1"],
+            'names that only contain a blocked function' => ['SELECT setvalue, sleeping, set_configuration FROM prefix_user'],
         ];
     }
 
@@ -253,20 +261,26 @@ final class sql_hardening_test extends advanced_testcase {
         global $DB;
         $this->resetAfterTest();
 
-        // Tests are wrapped in a transaction unless they ask not to be.
+        // Only some databases wrap tests in a transaction (PostgreSQL does, MySQL and MariaDB do not), so the test
+        // opens the transaction of the caller itself.
+        $transaction = $DB->start_delegated_transaction();
         $this->assertTrue($DB->is_transaction_started());
 
-        $sql = 'SELECT id FROM prefix_user WHERE id = 2';
-        $report = $this->create_report($sql);
         try {
-            $report->execute_query($sql);
-            $this->fail('The query ran without a read only transaction');
-        } catch (\moodle_exception $e) {
-            $this->assertSame('readonlyunavailable', $e->errorcode);
-        }
+            $sql = 'SELECT id FROM prefix_user WHERE id = 2';
+            $report = $this->create_report($sql);
+            try {
+                $report->execute_query($sql);
+                $this->fail('The query ran without a read only transaction');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('readonlyunavailable', $e->errorcode);
+            }
 
-        // The caller can still write.
-        $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
+            // The caller can still write.
+            $this->assertNotEmpty($this->getDataGenerator()->create_user()->id);
+        } finally {
+            $transaction->allow_commit();
+        }
     }
 
     /**

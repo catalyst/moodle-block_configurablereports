@@ -497,7 +497,7 @@ $string['email_send'] = 'Send';
 
 $string['allowedsqlusers'] = 'SQL report users';
 $string['allowedsqlusersinfo'] =
-    'If you wish to only allow certain admin users to manage sql reports, add a list of usernames separated by commas. They must also have the block/configurable_reports:managesqlreports capability.';
+    'If you wish to only allow certain admin users to manage sql reports, add a list of usernames separated by commas. They must also have the block/configurable_reports:managesqlreports capability. Users who manage SQL reports can read any data in the database, so they should be trusted as site administrators.';
 $string['global'] = 'Global report';
 $string['enableglobal'] = 'This is a global report (accesible from any course)';
 $string['global_help'] =
@@ -600,3 +600,4 @@ $string['missingreportclassfile'] = 'The Configurable Reports report class file 
 $string['unresolvedplaceholder'] = 'An unresolved dynamic placeholder remains in the report SQL.';
 $string['invalidfiltervar'] = 'The value of the filter_var parameter is not valid for this report.';
 $string['readonlyunavailable'] = 'This query cannot run read only on the site database here. Ask an administrator to set up the report database connection in the settings of the plugin.';
+$string['cachedef_graphdata'] = 'Data of the report charts, kept for the images that draw them';

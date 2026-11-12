@@ -46,7 +46,7 @@ if (!$course = $DB->get_record('course', ['id' => $courseid])) {
 }
 
 // Force user login in course (SITE or Course).
-if ((int) $course->id === SITEID) {
+if ($course->id == SITEID) {
     require_login();
     $context = context_system::instance();
 } else {
@@ -71,15 +71,15 @@ if (!empty($graphs)) {
     foreach ($graphs as $g) {
         $classname = cr_require_component_plugin('plot', $g['pluginname']);
         if ($g['id'] == $id) {
-            $class = new $classname($report);
-            $series = $class->get_series($g['formdata']);
+            $data = cr_get_graph_data($report->id, $id);
+            $series = $data['series'] ?? [];
             break;
         }
     }
 
     if ($g['id'] == $id) {
-        $min = optional_param('min', 0, PARAM_INT);
-        $max = optional_param('max', 0, PARAM_INT);
+        $min = (int) ($data['min'] ?? 0);
+        $max = (int) ($data['max'] ?? 0);
         $abcise = optional_param('abcise', -1, PARAM_INT);
 
         $abciselabel = [];

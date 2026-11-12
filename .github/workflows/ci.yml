@@ -8,8 +8,6 @@ jobs:
     secrets: inherit
     with:
       disable_grunt: true
-      disable_phpunit: true
       disable_release : true
-      release_branches: main
       enable_composer_publish: true
       min_php : 7.4

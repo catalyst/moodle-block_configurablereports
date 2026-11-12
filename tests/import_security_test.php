@@ -262,4 +262,55 @@ final class import_security_test extends advanced_testcase {
         $report->execute_query('SELECT id FROM {user}; SELECT 1');
     }
 
+    /**
+     * A value holding the end marker of a CDATA section cannot close it and add elements of its own.
+     */
+    public function test_export_escapes_cdata_end(): void {
+        global $DB, $SITE;
+
+        $this->setAdminUser();
+        $report = $this->create_sql_report('SELECT 1');
+        $report->summary = 'Hello]]><type>sql</type><global>1</global><![CDATA[';
+        $report->type = 'users';
+        $report->components = cr_serialize([]);
+        $DB->update_record('block_configurable_reports', $report);
+        $report = $DB->get_record('block_configurable_reports', ['id' => $report->id]);
+
+        $xml = cr_export_xml($report, '2024051300');
+
+        $data = xmlize($xml, 1, 'UTF-8');
+        $this->assertCount(1, $data['report']['#']['type']);
+        $this->assertSame('users', $data['report']['#']['type'][0]['#']);
+        $this->assertCount(1, $data['report']['#']['global']);
+        $this->assertNotSame('1', trim($data['report']['#']['global'][0]['#']));
+        $this->assertSame($report->summary, $data['report']['#']['summary'][0]['#']);
+
+        // The export imports back as the report that was exported.
+        $this->assertTrue(cr_import_xml($xml, $SITE));
+        $imported = $DB->get_records_select('block_configurable_reports', 'id <> ?', [$report->id]);
+        $this->assertCount(1, $imported);
+        $imported = reset($imported);
+        $this->assertSame('users', $imported->type);
+        $this->assertSame($report->summary, $imported->summary);
+    }
+
+    /**
+     * A file that repeats a field is refused, whichever value would win.
+     */
+    public function test_import_refuses_repeated_fields(): void {
+        global $DB, $SITE;
+
+        $this->setAdminUser();
+        $xml = $this->build_import_xml('users');
+        $xml = str_replace('</report>', '<type><![CDATA[sql]]></type></report>', $xml);
+
+        try {
+            cr_import_xml($xml, $SITE);
+            $this->fail('Exception expected');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorimporting', $e->errorcode);
+        }
+        $this->assertFalse($DB->record_exists('block_configurable_reports', []));
+    }
+
 }

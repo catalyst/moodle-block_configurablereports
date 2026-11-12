@@ -29,10 +29,17 @@ require_once('../../config.php');
 defined('MOODLE_INTERNAL') || die;
 require_once($CFG->libdir . '/formslib.php');
 
-require_login();
-global $PAGE, $USER, $DB, $COURSE;
-$context = context_course::instance($COURSE->id);
+$courseid = optional_param('courseid', SITEID, PARAM_INT);
+$course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
+if ($course->id == SITEID) {
+    require_login();
+    $context = context_system::instance();
+} else {
+    require_login($course);
+    $context = context_course::instance($course->id);
+}
 $PAGE->set_context($context);
+$PAGE->set_url('/blocks/configurable_reports/send_emails.php', ['courseid' => $course->id]);
 
 if (
     !has_capability('block/configurable_reports:managereports', $context) &&
@@ -40,6 +47,8 @@ if (
 ) {
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
+// Emailing a list of users is bulk messaging, which core restricts with its own capability.
+require_capability('moodle/course:bulkmessaging', $context);
 
 /**
  * Class sendemail_form
@@ -65,6 +74,8 @@ class sendemail_form extends moodleform {
 
         $mform->addElement('hidden', 'usersids', $this->_customdata['usersids']);
         $mform->addElement('hidden', 'courseid', $this->_customdata['courseid']);
+        $mform->setType('usersids', PARAM_SEQUENCE);
+        $mform->setType('courseid', PARAM_INT);
 
         $mform->addElement('text', 'subject', get_string('email_subject', 'block_configurable_reports'));
         $mform->setType('subject', PARAM_TEXT);
@@ -80,21 +91,32 @@ class sendemail_form extends moodleform {
     }
 }
 
-// TODO _POST?? not Moodle way.
+// The users come from the report table checkboxes, and then from the hidden field of this form.
+$userids = optional_param_array('userids', [], PARAM_INT);
+$usersids = $userids ? implode(',', $userids) : optional_param('usersids', '', PARAM_SEQUENCE);
+
 $form = new sendemail_form(null, [
-    'usersids' => implode(',', $_POST['userids']),
-    'courseid' => (int) $_POST['courseid'],
+    'usersids' => $usersids,
+    'courseid' => $course->id,
 ]);
 
+$returnurl = new moodle_url('/course/view.php', ['id' => $course->id]);
 if ($form->is_cancelled()) {
-    redirect(new moodle_url('/course/view.php?id=' . $data->courseid));
+    redirect($returnurl);
 } else if ($data = $form->get_data()) {
-    foreach (explode(',', $data->usersids) as $userid) {
-        $abouttosenduser = $DB->get_record('user', ['id' => (int) $userid]);
-        email_to_user($abouttosenduser, $USER, $data->subject, format_text($data->content['text']), $data->content['text']);
+    foreach (array_filter(explode(',', $data->usersids)) as $userid) {
+        $recipient = core_user::get_user((int) $userid);
+        // Only email active users, enrolled in the course when the report is not a site report.
+        if (
+            !$recipient || $recipient->deleted || $recipient->suspended ||
+            ($course->id != SITEID && !is_enrolled($context, $recipient))
+        ) {
+            continue;
+        }
+        email_to_user($recipient, $USER, $data->subject, format_text($data->content['text']), $data->content['text']);
     }
     // After emails were sent... go back to where you came from.
-    redirect(new moodle_url('/course/view.php?id=' . $data->courseid));
+    redirect($returnurl);
 }
 
 $PAGE->set_title(get_string('email', 'questionnaire'));

@@ -174,6 +174,45 @@ function urldecode_recursive($var) {
 }
 
 /**
+ * Keep the data of a report chart in the session, for the image that draws it, and return the image URL.
+ *
+ * The data used to travel in the image URL, which wrote report data to the web server logs, broke long reports
+ * and let anyone draw any data under the name of a report.
+ *
+ * @param string $plot The plot plugin.
+ * @param object $report The report record.
+ * @param string $id The id of the chart in the report.
+ * @param array $data The data the chart draws.
+ * @return string
+ */
+function cr_get_graph_url(string $plot, object $report, string $id, array $data): string {
+    $key = $report->id . '_' . $id . '_' . sha1(serialize($data));
+    cache::make('block_configurable_reports', 'graphdata')->set($key, $data);
+
+    $params = ['reportid' => $report->id, 'id' => $id, 'courseid' => $report->courseid, 'key' => $key];
+
+    return (new moodle_url('/blocks/configurable_reports/components/plot/' . $plot . '/graph.php', $params))->out(false);
+}
+
+/**
+ * The data of the report chart an image draws, kept by cr_get_graph_url().
+ *
+ * @param int $reportid
+ * @param string $id The id of the chart in the report.
+ * @return array Empty when the session does not have it.
+ */
+function cr_get_graph_data(int $reportid, string $id): array {
+    $key = required_param('key', PARAM_ALPHANUMEXT);
+    // The key names the chart it was kept for, so it cannot draw the data of another one.
+    if (strpos($key, $reportid . '_' . $id . '_') !== 0) {
+        return [];
+    }
+    $data = cache::make('block_configurable_reports', 'graphdata')->get($key);
+
+    return is_array($data) ? $data : [];
+}
+
+/**
  * cr_get_my_reports
  *
  * @param int $courseid
@@ -184,14 +223,14 @@ function urldecode_recursive($var) {
 function cr_get_my_reports(int $courseid, int $userid, bool $allcourses = true): array {
     global $DB;
 
-    if ($courseid === SITEID) {
+    if ($courseid == SITEID) {
         $context = context_system::instance();
     } else {
         $context = context_course::instance($courseid);
     }
 
     if (has_capability('block/configurable_reports:managereports', $context, $userid)) {
-        if ($courseid === SITEID && $allcourses) {
+        if ($courseid == SITEID && $allcourses) {
             $reports = $DB->get_records('block_configurable_reports', null, 'name ASC');
         } else {
             $reports = $DB->get_records('block_configurable_reports', ['courseid' => $courseid], 'name ASC');
@@ -321,7 +360,7 @@ function cr_check_report_permissions($report, int $userid, context $context) {
  */
 function cr_get_report_plugins(int $courseid): array {
     $pluginoptions = [];
-    $context = ($courseid === SITEID) ? context_system::instance() : context_course::instance($courseid);
+    $context = ($courseid == SITEID) ? context_system::instance() : context_course::instance($courseid);
     $plugins = get_list_of_plugins('blocks/configurable_reports/reports');
 
     if ($plugins) {
@@ -504,8 +543,10 @@ function cr_print_table(object $table, bool $return = false) {
         }
     }
     $output .= '</table>' . "\n";
-    $output .= '<input type="hidden" name="courseid" value="' . $COURSE->id . '">';
-    if ($isuserid != -1) {
+    $output .= '<input type="hidden" name="courseid" value="' . (int) $COURSE->id . '">';
+    // The emails are sent from the current course, see send_emails.php.
+    $emailcontext = ($COURSE->id == SITEID) ? context_system::instance() : context_course::instance($COURSE->id);
+    if ($isuserid != -1 && has_capability('moodle/course:bulkmessaging', $emailcontext)) {
         $output .= '<input type="submit" value="send emails">';
     }
     $output .= '</form>';
@@ -639,6 +680,32 @@ function cr_make_categories_list(&$list, &$parents, $requiredcapability = '', $e
 }
 
 /**
+ * Build the XML file a report is exported to, which cr_import_xml() reads back.
+ *
+ * @param stdClass $report The report record.
+ * @param string $version The plugin version.
+ * @return string
+ */
+function cr_export_xml(stdClass $report, string $version): string {
+    $data = '<?xml version="1.0" encoding="UTF-8" ?>' . "\n";
+    $data .= '<report version="' . s($version) . '">';
+
+    $reportdata = (array) $report;
+    unset($reportdata['id'], $reportdata['courseid'], $reportdata['ownerid']);
+
+    $reportdata['components'] = base64_encode($reportdata['components']);
+
+    foreach ($reportdata as $key => $value) {
+        // A CDATA section cannot contain its end marker, so it is split in two sections, otherwise a value
+        // such as the summary could close it and add elements of its own.
+        $value = str_replace(']]>', ']]]]><![CDATA[>', (string) $value);
+        $data .= "<$key><![CDATA[$value]]></$key>\n";
+    }
+
+    return $data . "</report>";
+}
+
+/**
  * cr_import_xml
  *
  * @param string $xml
@@ -662,6 +729,10 @@ function cr_import_xml(string $xml, object $course) {
         foreach ($data['report']['#'] as $key => $val) {
             if (!in_array($key, $allowedfields, true)) {
                 continue;
+            }
+            // The export writes every field once, a repeated one could hide the value the report really had.
+            if (count($val) !== 1) {
+                throw new moodle_exception('errorimporting', 'block_configurable_reports');
             }
             if ($key === 'components') {
                 $val[0]['#'] = base64_decode(trim($val[0]['#']));

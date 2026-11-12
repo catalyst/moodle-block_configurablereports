@@ -113,17 +113,29 @@ class plugin_fcoursefield extends plugin_base {
         $courselist = $reportclass->elements_by_conditions($conditions);
 
         if (!empty($courselist)) {
-            $sql = 'SELECT DISTINCT(' . $formdata->field . ') as ufield FROM {course} WHERE ' . $formdata->field .
-                " <> '' ORDER BY ufield ASC";
-            if ($rs = $remotedb->get_recordset_sql($sql, null)) {
-                foreach ($rs as $u) {
-                    $filteroptions[base64_encode($u->ufield)] = $u->ufield;
-                }
-                $rs->close();
+            // Only list the values of the courses in the report. Databases cap the parameters a query binds,
+            // so a long list of courses is read in parts.
+            $chunks = array_chunk($courselist, 1000);
+            $values = [];
+            foreach ($chunks as $chunk) {
+                [$insql, $params] = $remotedb->get_in_or_equal($chunk);
+                $sql = "SELECT DISTINCT({$formdata->field}) AS ufield
+                          FROM {course}
+                         WHERE {$formdata->field} <> '' AND id $insql
+                      ORDER BY ufield ASC";
+                $values = array_merge($values, $remotedb->get_fieldset_sql($sql, $params));
+            }
+            if (count($chunks) > 1) {
+                $values = array_unique($values);
+                core_collator::asort($values);
+            }
+            foreach ($values as $value) {
+                $filteroptions[base64_encode($value)] = s($value);
             }
         }
 
-        $mform->addElement('select', 'filter_fcoursefield_' . $formdata->field, get_string($formdata->field), $filteroptions);
-        $mform->setType('filter_courses', PARAM_BASE64);
+        $filtername = 'filter_fcoursefield_' . $formdata->field;
+        $mform->addElement('select', $filtername, get_string($formdata->field), $filteroptions);
+        $mform->setType($filtername, PARAM_RAW);
     }
 }

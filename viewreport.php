@@ -36,6 +36,8 @@ if (!$report = $DB->get_record('block_configurable_reports', ['id' => $id])) {
     throw new moodle_exception('reportdoesnotexists', 'block_configurable_reports');
 }
 
+// A global report runs in the caller's course, but it is still managed in its own course.
+$report->homecourseid = $report->courseid;
 if ($courseid && $report->global) {
     $report->courseid = $courseid;
 } else {
@@ -47,7 +49,7 @@ if (!$course = $DB->get_record('course', ['id' => $courseid])) {
 }
 
 // Force user login in course (SITE or Course).
-if ((int) $course->id === SITEID) {
+if ($course->id == SITEID) {
     require_login();
     $context = context_system::instance();
 } else {
@@ -91,8 +93,10 @@ if (!$download) {
     $reportname = format_string($report->name);
     $navlinks = [];
 
-    $hasmanageallcap = has_capability('block/configurable_reports:managereports', $context);
-    $hasmanageowncap = has_capability('block/configurable_reports:manageownreports', $context);
+    // Reports are managed in their own course, which is not the current one for a global report.
+    $homecontext = $reportclass->get_home_context();
+    $hasmanageallcap = $homecontext && has_capability('block/configurable_reports:managereports', $homecontext);
+    $hasmanageowncap = $homecontext && has_capability('block/configurable_reports:manageownreports', $homecontext);
 
     if ($hasmanageallcap || ($hasmanageowncap && $report->ownerid == $USER->id)) {
         $managereporturl = new moodle_url('/blocks/configurable_reports/managereport.php', ['courseid' => $report->courseid]);

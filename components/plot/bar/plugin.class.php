@@ -63,7 +63,6 @@ class plugin_bar extends plugin_base {
      * @return string
      */
     public function execute($id, $data, $finalreport) {
-        global $CFG;
         // Data -> Plugin configuration data.
 
         $series = [];
@@ -104,21 +103,6 @@ class plugin_bar extends plugin_base {
             }
         }
 
-        $graphdata = urlencode(json_encode($series));
-
-        return $CFG->wwwroot . '/blocks/configurable_reports/components/plot/bar/graph.php?reportid=' . $this->report->id . '&id=' .
-            $id . '&graphdata=' . $graphdata . '&courseid=' . $this->report->courseid;
-    }
-
-    /**
-     * Get series
-     *
-     * @return array
-     */
-    public function get_series(): array {
-        $graphdataraw = required_param('graphdata', PARAM_RAW);
-        $graphdata = json_decode(urldecode($graphdataraw), false, 512, JSON_THROW_ON_ERROR);
-
-        return (array) $graphdata;
+        return cr_get_graph_url('bar', $this->report, $id, $series);
     }
 }
