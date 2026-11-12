@@ -55,6 +55,11 @@ if (
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
 
+// The export includes the query, so SQL reports are only exported to users who could edit them.
+if ($report->type === 'sql' && !block_configurable_reports_can_managesqlreports($context)) {
+    throw new moodle_exception('nosqlpermissions', 'block_configurable_reports');
+}
+
 if (!confirm_sesskey()) {
     throw new moodle_exception('badpermissions', 'block_configurable_reports');
 }
