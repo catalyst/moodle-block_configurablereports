@@ -66,19 +66,7 @@ if (!$version && !$version = $DB->get_field('block', 'version', ['name' => 'conf
     throw new moodle_exception('Plugin not found');
 }
 
-$data = '<?xml version="1.0" encoding="UTF-8" ?>' . "\n";
-$data .= "<report version=\"$version\">";
-
-$reportdata = (array) $report;
-unset($reportdata['id'], $reportdata['courseid'], $reportdata['ownerid']);
-
-$reportdata['components'] = base64_encode($reportdata['components']);
-
-foreach ($reportdata as $key => $value) {
-    $data .= "<$key><![CDATA[$value]]></$key>\n";
-}
-
-$data .= "</report>";
+$data = cr_export_xml($report, $version);
 
 if (strpos($CFG->wwwroot, 'https://') === 0) {
     // Https sites - watch out for IE! KB812935 and KB316431.

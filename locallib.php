@@ -641,6 +641,32 @@ function cr_make_categories_list(&$list, &$parents, $requiredcapability = '', $e
 }
 
 /**
+ * Build the XML file a report is exported to, which cr_import_xml() reads back.
+ *
+ * @param stdClass $report The report record.
+ * @param string $version The plugin version.
+ * @return string
+ */
+function cr_export_xml(stdClass $report, string $version): string {
+    $data = '<?xml version="1.0" encoding="UTF-8" ?>' . "\n";
+    $data .= '<report version="' . s($version) . '">';
+
+    $reportdata = (array) $report;
+    unset($reportdata['id'], $reportdata['courseid'], $reportdata['ownerid']);
+
+    $reportdata['components'] = base64_encode($reportdata['components']);
+
+    foreach ($reportdata as $key => $value) {
+        // A CDATA section cannot contain its end marker, so it is split in two sections, otherwise a value
+        // such as the summary could close it and add elements of its own.
+        $value = str_replace(']]>', ']]]]><![CDATA[>', (string) $value);
+        $data .= "<$key><![CDATA[$value]]></$key>\n";
+    }
+
+    return $data . "</report>";
+}
+
+/**
  * cr_import_xml
  *
  * @param string $xml
@@ -664,6 +690,10 @@ function cr_import_xml(string $xml, object $course) {
         foreach ($data['report']['#'] as $key => $val) {
             if (!in_array($key, $allowedfields, true)) {
                 continue;
+            }
+            // The export writes every field once, a repeated one could hide the value the report really had.
+            if (count($val) !== 1) {
+                throw new moodle_exception('errorimporting', 'block_configurable_reports');
             }
             if ($key === 'components') {
                 $val[0]['#'] = base64_decode(trim($val[0]['#']));
